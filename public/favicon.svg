@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Indigo background — the credential color -->
+  <rect width="32" height="32" rx="4" fill="#1E1D4C"/>
+
+  <!-- T -->
+  <rect x="3" y="8" width="10" height="2" fill="#EEE9DC"/>
+  <rect x="6.5" y="8" width="3" height="15" fill="#EEE9DC"/>
+
+  <!-- A -->
+  <polygon points="19,23 23,8 27,23" fill="none" stroke="#EEE9DC" stroke-width="2.2" stroke-linejoin="round"/>
+  <line x1="20.5" y1="18" x2="25.5" y2="18" stroke="#EEE9DC" stroke-width="1.8"/>
+
+  <!-- Gold accent line at bottom -->
+  <rect x="3" y="27" width="26" height="1.5" rx="0.75" fill="#C8973A" opacity="0.8"/>
+</svg>

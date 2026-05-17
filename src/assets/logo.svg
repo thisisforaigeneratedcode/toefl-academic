@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Outer navy circle -->
+  <circle cx="100" cy="100" r="96" fill="#0C1A35"/>
+  <!-- Gold accent ring -->
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#C8973A" stroke-width="2.5"/>
+  <!-- Inner white ring for elegance -->
+  <circle cx="100" cy="100" r="83" fill="none" stroke="#C8973A" stroke-width="0.8" opacity="0.5"/>
+
+  <!-- Globe lines (meridian/equator) -->
+  <ellipse cx="100" cy="100" rx="46" ry="46" fill="none" stroke="#C8973A" stroke-width="1.5" opacity="0.35"/>
+  <ellipse cx="100" cy="100" rx="23" ry="46" fill="none" stroke="#C8973A" stroke-width="1" opacity="0.25"/>
+  <line x1="54" y1="100" x2="146" y2="100" stroke="#C8973A" stroke-width="1" opacity="0.25"/>
+  <line x1="100" y1="54" x2="100" y2="146" stroke="#C8973A" stroke-width="1" opacity="0.25"/>
+
+  <!-- "TA" lettermark - serif style -->
+  <!-- T -->
+  <rect x="47" y="72" width="36" height="6" rx="1" fill="#C8973A"/>
+  <rect x="61" y="77" width="8" height="36" rx="1" fill="#C8973A"/>
+  <!-- A -->
+  <polygon points="108,113 124,72 140,113 134,113 124,83 114,113" fill="#C8973A"/>
+  <rect x="111.5" y="97" width="25" height="5.5" rx="0.5" fill="#C8973A"/>
+
+  <!-- Bottom wordmark -->
+  <text x="100" y="158" font-family="Georgia, serif" font-size="12" font-weight="bold" fill="#C8973A" text-anchor="middle" letter-spacing="3">TOEFL</text>
+  <text x="100" y="173" font-family="Georgia, serif" font-size="9.5" fill="#C8973A" text-anchor="middle" letter-spacing="4" opacity="0.85">ACADEMIC</text>
+
+  <!-- Top separator lines -->
+  <line x1="62" y1="148" x2="88" y2="148" stroke="#C8973A" stroke-width="0.8" opacity="0.6"/>
+  <line x1="112" y1="148" x2="138" y2="148" stroke="#C8973A" stroke-width="0.8" opacity="0.6"/>
+  <circle cx="100" cy="148" r="1.5" fill="#C8973A" opacity="0.6"/>
+</svg>

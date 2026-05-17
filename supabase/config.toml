@@ -1,0 +1,7 @@
+project_id = "sjzrajrwngkpezzuwudh"
+
+[functions.start-exam]
+verify_jwt = true
+
+[functions.submit-exam]
+verify_jwt = true
