@@ -72,15 +72,39 @@ export default function Admin() {
     return () => { supabase.removeChannel(channel); };
   }, [isAdmin]);
 
+  const addBusinessHours = (date: Date, hours: number): Date => {
+    const result = new Date(date);
+    let remaining = hours;
+    while (remaining > 0) {
+      result.setHours(result.getHours() + 1);
+      const day = result.getDay();
+      if (day !== 0 && day !== 6) remaining--;
+    }
+    return result;
+  };
+
   const computeBalance = (costs: any[]) => {
     const deposits    = costs.filter((r) => r.type === "deposit");
     const withdrawals = costs.filter((r) => r.type === "withdrawal");
 
-    const deposited_net   = deposits.reduce((s: number, r: any) => s + r.transaction_amount_kes - r.pretium_fee_kes - r.api_earnings_kes, 0);
+    const mpesaDeposits   = deposits.filter((r) => !String(r.payment_id ?? "").startsWith("TA-"));
+    const paystackDeposits = deposits.filter((r) => String(r.payment_id ?? "").startsWith("TA-"));
+
+    const deposited_net   = mpesaDeposits.reduce((s: number, r: any) => s + r.transaction_amount_kes - r.pretium_fee_kes - r.api_earnings_kes, 0);
     const withdrawn_total = withdrawals.reduce((s: number, r: any) => s + r.transaction_amount_kes, 0);
     const available_to_withdraw_kes = Math.max(0, deposited_net - withdrawn_total);
 
-    setWalletData({ available_to_withdraw_kes });
+    const now = new Date();
+    let paystack_available = 0;
+    let paystack_held = 0;
+    for (const r of paystackDeposits) {
+      const net = r.transaction_amount_kes - r.pretium_fee_kes;
+      const releaseTime = addBusinessHours(new Date(r.created_at), 48);
+      if (releaseTime <= now) paystack_available += net;
+      else paystack_held += net;
+    }
+
+    setWalletData({ available_to_withdraw_kes, paystack_available, paystack_held });
     setWithdrawAmount(String(available_to_withdraw_kes));
   };
 
@@ -295,6 +319,27 @@ export default function Admin() {
                       on M-Pesa after fees
                     </p>
                   )}
+                </div>
+              </Card>
+
+              {/* Paystack card balance */}
+              <Card className="p-6">
+                <div className="text-xs uppercase text-muted-foreground mb-3">Paystack (Card payments)</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Available now</div>
+                    <div className="font-serif text-2xl font-bold text-blue-700">
+                      KES {(walletData?.paystack_available ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">Released by Paystack</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Held by Paystack</div>
+                    <div className="font-serif text-2xl font-bold text-muted-foreground">
+                      KES {(walletData?.paystack_held ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">Releases within 48 business hours</div>
+                  </div>
                 </div>
               </Card>
 
