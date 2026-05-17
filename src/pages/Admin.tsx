@@ -75,23 +75,12 @@ export default function Admin() {
   const computeBalance = (costs: any[]) => {
     const deposits    = costs.filter((r) => r.type === "deposit");
     const withdrawals = costs.filter((r) => r.type === "withdrawal");
-    const settlements = costs.filter((r) => r.type === "settlement");
 
     const deposited_net   = deposits.reduce((s: number, r: any) => s + r.transaction_amount_kes - r.pretium_fee_kes - r.api_earnings_kes, 0);
     const withdrawn_total = withdrawals.reduce((s: number, r: any) => s + r.transaction_amount_kes, 0);
     const available_to_withdraw_kes = Math.max(0, deposited_net - withdrawn_total);
 
-    const ownerEarned           = deposits.reduce((s: number, r: any) => s + (r.owner_earnings_kes ?? 0), 0);
-    const ownerSettledViaRows   = deposits.filter((r: any) => r.owner_withdrawn).reduce((s: number, r: any) => s + (r.owner_earnings_kes ?? 0), 0);
-    const ownerSettledViaRecs   = settlements.reduce((s: number, r: any) => s + (r.owner_earnings_kes ?? 0), 0);
-    const api_earnings_kes      = Math.max(0, ownerEarned - ownerSettledViaRows - ownerSettledViaRecs);
-
-    const partnerEarned         = deposits.reduce((s: number, r: any) => s + (r.partner_earnings_kes ?? 0), 0);
-    const partnerSettledViaRows = deposits.filter((r: any) => r.partner_withdrawn).reduce((s: number, r: any) => s + (r.partner_earnings_kes ?? 0), 0);
-    const partnerSettledViaRecs = settlements.reduce((s: number, r: any) => s + (r.partner_earnings_kes ?? 0), 0);
-    const evans_earnings_kes    = Math.max(0, partnerEarned - partnerSettledViaRows - partnerSettledViaRecs);
-
-    setWalletData({ available_to_withdraw_kes, api_earnings_kes, evans_earnings_kes });
+    setWalletData({ available_to_withdraw_kes });
     setWithdrawAmount(String(available_to_withdraw_kes));
   };
 
@@ -249,9 +238,10 @@ export default function Admin() {
               </div>
             </Card>
           </TabsContent>
+
           <TabsContent value="wallet">
             <div className="space-y-4">
-              {/* Balance + withdraw — always visible */}
+              {/* Balance + withdraw */}
               <Card className="p-6 space-y-5">
                 <div className="flex items-start justify-between">
                   <div>
@@ -308,47 +298,7 @@ export default function Admin() {
                 </div>
               </Card>
 
-              {/* Brian + Evans earnings side by side */}
-              <div className="grid grid-cols-2 gap-4">
-                <Card className="p-5">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Brian (60%)</p>
-                  <p className="text-2xl font-bold">KES {(walletData?.api_earnings_kes ?? 0).toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Auto-settles at KES 5,000</p>
-                  {walletData && walletData.api_earnings_kes > 0 && walletData.api_earnings_kes < 5000 && (
-                    <div className="mt-3">
-                      <div className="w-full bg-muted rounded-full h-1.5">
-                        <div className="bg-primary h-1.5 rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (walletData.api_earnings_kes / 5000) * 100).toFixed(1)}%` }} />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">{walletData.api_earnings_kes.toLocaleString()} / 5,000</p>
-                    </div>
-                  )}
-                  {walletData && walletData.api_earnings_kes >= 5000 && (
-                    <p className="text-xs text-green-600 mt-2 font-medium">Ready to settle</p>
-                  )}
-                </Card>
-                <Card className="p-5">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Evans (40%)</p>
-                  <p className="text-2xl font-bold">KES {(walletData?.evans_earnings_kes ?? 0).toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Auto-settles at KES 5,000</p>
-                  {walletData && walletData.evans_earnings_kes > 0 && walletData.evans_earnings_kes < 5000 && (
-                    <div className="mt-3">
-                      <div className="w-full bg-muted rounded-full h-1.5">
-                        <div
-                          className="bg-primary h-1.5 rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (walletData.evans_earnings_kes / 5000) * 100).toFixed(1)}%` }}
-                        />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">{(walletData.evans_earnings_kes ?? 0).toLocaleString()} / 5,000</p>
-                    </div>
-                  )}
-                  {walletData && walletData.evans_earnings_kes >= 5000 && (
-                    <p className="text-xs text-green-600 mt-2 font-medium">Ready to settle</p>
-                  )}
-                </Card>
-              </div>
-
-              {/* Transaction history — always visible, tabbed */}
+              {/* Transaction history */}
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-sm">Transaction history</h3>
@@ -446,8 +396,8 @@ export default function Admin() {
                 </DialogHeader>
                 {selectedTx && (() => {
                   const r = selectedTx;
-                  const net = r.transaction_amount_kes - r.pretium_fee_kes;
-                  const adminRevenue = net - r.api_earnings_kes;
+                  const totalFees = r.pretium_fee_kes + r.api_earnings_kes;
+                  const adminRevenue = r.transaction_amount_kes - totalFees;
                   return (
                     <div className="space-y-2 text-sm">
                       <p className="text-xs text-muted-foreground mb-2">{format(new Date(r.created_at), "PP")}</p>
@@ -456,36 +406,8 @@ export default function Admin() {
                         <span className="font-semibold">KES {r.transaction_amount_kes?.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Pretium fee (2%)</span>
-                        <span className="text-destructive">− KES {r.pretium_fee_kes?.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-border pt-2 mt-2">
-                        <span className="text-muted-foreground">Net in wallet</span>
-                        <span>KES {net.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">API earnings (8%)</span>
-                        <span>KES {r.api_earnings_kes?.toLocaleString()}</span>
-                      </div>
-                      <div className="ml-4 space-y-1 text-xs text-muted-foreground border-l-2 border-border pl-3">
-                        <div className="flex justify-between">
-                          <span>
-                            Brian (60%)
-                            <span className={`ml-1.5 ${r.owner_withdrawn ? "text-green-600" : "text-muted-foreground"}`}>
-                              {r.owner_withdrawn ? "✓ settled" : "· pending"}
-                            </span>
-                          </span>
-                          <span className="font-medium text-foreground">KES {r.owner_earnings_kes?.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>
-                            Evans (40%)
-                            <span className={`ml-1.5 ${r.partner_withdrawn ? "text-green-600" : "text-muted-foreground"}`}>
-                              {r.partner_withdrawn ? "✓ settled" : "· pending"}
-                            </span>
-                          </span>
-                          <span className="font-medium text-foreground">KES {r.partner_earnings_kes?.toLocaleString()}</span>
-                        </div>
+                        <span className="text-muted-foreground">Fees</span>
+                        <span className="text-destructive">− KES {totalFees?.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between border-t border-border pt-2 mt-2 font-semibold">
                         <span>Admin wallet received</span>
