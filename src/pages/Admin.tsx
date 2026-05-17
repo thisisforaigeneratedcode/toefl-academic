@@ -325,12 +325,13 @@ export default function Admin() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="text-left text-xs uppercase text-muted-foreground">
-                          <tr><th className="py-2">Date</th><th>Candidate</th><th>Level</th><th>Amount (KES)</th><th>Status</th><th></th></tr>
+                          <tr><th className="py-2">Date</th><th>Candidate</th><th>Level</th><th>Amount (KES)</th><th>Method</th><th>Status</th><th></th></tr>
                         </thead>
                         <tbody>
                           {rows.map((r) => {
                             const booking = bookings.find((b) => b.id === r.booking_id);
                             const candidate = users.find((u) => u.id === booking?.user_id);
+                            const isCard = typeof r.payment_id === "string" && r.payment_id.startsWith("TA-");
                             return (
                               <tr key={r.id} className="border-t border-border">
                                 <td className="py-2 text-xs">{format(new Date(r.created_at), "PP")}</td>
@@ -340,6 +341,11 @@ export default function Admin() {
                                 </td>
                                 <td><Badge variant="secondary">{booking?.level ?? "—"}</Badge></td>
                                 <td className="font-medium">KES {r.transaction_amount_kes?.toLocaleString()}</td>
+                                <td>
+                                  <Badge variant="outline" className={isCard ? "text-blue-700 border-blue-300" : "text-green-700 border-green-300"}>
+                                    {isCard ? "Card" : "M-Pesa"}
+                                  </Badge>
+                                </td>
                                 <td><Badge variant="outline" className="text-green-700 border-green-300">received</Badge></td>
                                 <td>
                                   <button onClick={() => setSelectedTx(r)} className="p-1 text-muted-foreground hover:text-primary" title="View breakdown">

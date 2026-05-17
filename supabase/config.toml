@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.submit-exam]
 verify_jwt = true
+
+[functions.pretium-webhook]
+verify_jwt = false
