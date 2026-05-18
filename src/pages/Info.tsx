@@ -20,7 +20,7 @@ export function HowItWorks() {
 }
 
 export function Faq() {
-  const qs = [["How long does the exam take?","About 5 minutes — a short listening dictation and a reading-aloud task."],["When will I get my certificate?","Examiners review every submission, usually within 24 hours. You'll see the certificate appear on your dashboard once approved."],["Can I retake the exam?","Yes — book a new attempt anytime from your dashboard."],["Is the certificate accepted by employers?","TOEFL Academic certificates are CEFR-aligned and publicly verifiable, making them widely accepted by employers worldwide. Acceptance for visas/universities depends on the institution."],["How long is my certificate valid?","All certificates are valid for 2 years from the date of issue."],["What if I don't pass?","You'll see the examiner's note and can rebook the same level immediately."],["Is there a free sample?","Yes — try our short sample on the home page."]];
+  const qs = [["How long does the exam take?","About 5 minutes — a short listening dictation and a reading-aloud task."],["When will I get my certificate?","Examiners review every submission, usually within 24 hours. You'll see the certificate appear on your dashboard once approved."],["Can I retake the exam?","Yes — book a new attempt anytime from your dashboard. Each attempt is a separate purchase."],["Is the certificate accepted by employers?","TOEFL Academic certificates are CEFR-aligned and publicly verifiable, making them widely accepted by employers worldwide. Acceptance for visas/universities depends on the institution."],["How long is my certificate valid?","All certificates are valid for 2 years from the date of issue."],["What if I don't pass?","You'll see the examiner's note and can rebook the same level immediately."],["Is there a free sample?","Yes — try our short sample on the home page."],["Can I get a refund?","All exam fees are final and non-refundable. Your payment covers a single exam attempt — not a guaranteed outcome. This policy applies regardless of the result, whether you choose not to sit the exam, or any technical issues on your end. Please ensure you are ready before booking. See our Terms of Service for full details."]];
   return <Layout><div className="container mx-auto py-16 max-w-3xl"><h1 className="font-serif text-5xl font-bold text-primary mb-8">Frequently Asked Questions</h1><div className="space-y-4">{qs.map(([q,a],i) => <Card key={i} className="p-5"><h3 className="font-semibold text-primary mb-1">{q}</h3><p className="text-sm text-muted-foreground">{a}</p></Card>)}</div></div></Layout>;
 }
 
@@ -33,7 +33,65 @@ export function Privacy() {
 }
 
 export function Terms() {
-  return <Layout><div className="container mx-auto py-16 max-w-3xl"><h1 className="font-serif text-5xl font-bold text-primary mb-4">Terms of Service</h1><p className="text-muted-foreground">By using TOEFL Academic you agree to take exams honestly and without external assistance. Certificates obtained through fraudulent means will be revoked. TOEFL Academic reserves the right to invalidate any certificate found to be issued in error or in breach of these terms.</p></div></Layout>;
+  const sections: [string, string][] = [
+    [
+      "1. Acceptance of Terms",
+      "By registering an account or making a payment on TOEFL Academic, you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.",
+    ],
+    [
+      "2. What Your Payment Covers",
+      "Your exam fee purchases a single attempt at the selected CEFR level. It covers access to the exam, examiner review of your submission, and — if approved — issuance of your certificate. Payment does not guarantee a passing outcome, a specific band, or a certificate. Results depend entirely on your performance as assessed by our examiners.",
+    ],
+    [
+      "3. No Refund Policy",
+      "All payments are final and non-refundable. Once an exam fee has been processed, no refunds will be issued under any circumstances — including but not limited to: a failed attempt, a decision not to sit the exam, technical difficulties on the candidate's device or network, dissatisfaction with the result, or a change of mind. By completing payment you acknowledge and accept this policy in full.",
+    ],
+    [
+      "4. Chargebacks and Payment Disputes",
+      "Filing a chargeback or payment dispute with your bank or card provider after completing a transaction on TOEFL Academic constitutes a breach of these Terms. We maintain full transaction records and will contest all disputes with the relevant evidence. Accounts associated with a disputed transaction will be suspended immediately pending resolution.",
+    ],
+    [
+      "5. Retakes",
+      "If you do not pass, or choose not to sit a booked exam, you may purchase a new attempt at any time. Each attempt is a separate purchase.",
+    ],
+    [
+      "6. Exam Integrity",
+      "You agree to complete all exam tasks without external assistance, translation tools, or any form of impersonation. Certificates obtained through fraudulent means will be permanently revoked without refund, and the candidate's account will be permanently banned.",
+    ],
+    [
+      "7. Certificate Validity and Revocation",
+      "Certificates are valid for two years from the date of issue. TOEFL Academic reserves the right to revoke any certificate at any time if evidence of fraud, misrepresentation, or a technical error in assessment is found.",
+    ],
+    [
+      "8. Limitation of Liability",
+      "TOEFL Academic is not liable for any indirect, incidental, or consequential loss arising from use of this platform, including loss of employment opportunity or visa refusal. Our total liability in any matter is limited to the amount paid for the relevant exam attempt.",
+    ],
+    [
+      "9. Changes to Terms",
+      "We may update these Terms at any time. Continued use of the platform after changes are posted constitutes acceptance of the revised Terms.",
+    ],
+    [
+      "10. Contact",
+      "For any questions regarding these Terms, contact us at support@toeflacademic.com.",
+    ],
+  ];
+
+  return (
+    <Layout>
+      <div className="container mx-auto py-16 max-w-3xl">
+        <h1 className="font-serif text-5xl font-bold text-primary mb-2">Terms of Service</h1>
+        <p className="text-sm text-muted-foreground mb-10">Last updated: May 2026</p>
+        <div className="space-y-8">
+          {sections.map(([title, body]) => (
+            <div key={title}>
+              <h2 className="font-serif text-xl font-bold text-primary mb-2">{title}</h2>
+              <p className="text-muted-foreground leading-relaxed">{body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Layout>
+  );
 }
 
 export function ForEmployers() {

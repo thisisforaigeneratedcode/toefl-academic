@@ -39,6 +39,8 @@ export default function Dashboard() {
   const [payError, setPayError] = useState("");
   const [payMethod, setPayMethod] = useState<"mpesa" | "card">("mpesa");
   const [cardBusy, setCardBusy] = useState(false);
+  const [awaitSeconds, setAwaitSeconds] = useState(0);
+  const awaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = async (uid: string) => {
     const [{ data: b }, { data: a }, { data: c }, { data: p }] = await Promise.all([
@@ -135,13 +137,23 @@ export default function Dashboard() {
   }, [user]);
 
   useEffect(() => {
+    if (payPhase === "awaiting") {
+      setAwaitSeconds(0);
+      awaitTimerRef.current = setInterval(() => setAwaitSeconds((s) => s + 1), 1000);
+    } else {
+      if (awaitTimerRef.current) { clearInterval(awaitTimerRef.current); awaitTimerRef.current = null; }
+    }
+    return () => { if (awaitTimerRef.current) clearInterval(awaitTimerRef.current); };
+  }, [payPhase]);
+
+  useEffect(() => {
     if (!payingBooking) return;
     const updated = bookings.find((b) => b.id === payingBooking.id);
     if (updated?.payment_status === "completed") {
       setPayingBooking(null);
     } else if (updated?.payment_status === "failed" && payPhase === "awaiting") {
       setPayPhase("failed");
-      setPayError("Payment failed. Please try again.");
+      setPayError("The M-Pesa prompt timed out — you didn't enter your PIN in time, or the request was cancelled. Tap 'Try again' to send a new prompt, or switch to card payment.");
     }
   }, [bookings, payingBooking, payPhase]);
 
@@ -151,6 +163,7 @@ export default function Dashboard() {
     setPayPhase(booking.payment_status === "pending" ? "awaiting" : "input");
     setPayError("");
     setPayMethod("mpesa");
+    setAwaitSeconds(0);
   };
 
   const payWithCard = async () => {
@@ -395,14 +408,30 @@ export default function Dashboard() {
               <div className="text-center space-y-2">
                 <p className="font-semibold text-primary text-lg">Check your phone</p>
                 <p className="text-sm text-muted-foreground">
-                  A pop-up will appear on <strong>{payPhone}</strong>.<br />
+                  A pop-up appeared on <strong>{payPhone}</strong>.<br />
                   Enter your M-Pesa PIN to complete the payment.
                 </p>
                 <p className="text-xs text-muted-foreground pt-1 flex items-center justify-center gap-1">
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  Your exam will unlock here as soon as payment goes through.
+                  Your exam will unlock automatically once payment goes through.
                 </p>
               </div>
+              {awaitSeconds >= 30 && (
+                <div className="w-full rounded-lg bg-amber-50 border border-amber-200 p-3 text-center space-y-2">
+                  <p className="text-sm text-amber-800 font-medium">Didn't get the prompt?</p>
+                  <p className="text-xs text-amber-700">
+                    The M-Pesa prompt expires after 60 seconds. If it disappeared or never arrived, you can send a new one.
+                  </p>
+                  <div className="flex gap-2 justify-center pt-1">
+                    <Button size="sm" variant="outline" onClick={() => { setPayPhase("input"); setAwaitSeconds(0); }}>
+                      Send again
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setPayMethod("card"); setPayPhase("input"); setAwaitSeconds(0); }}>
+                      Pay with card instead
+                    </Button>
+                  </div>
+                </div>
+              )}
               <Button variant="outline" size="sm" onClick={() => setPayingBooking(null)}>Close</Button>
             </div>
           )}
