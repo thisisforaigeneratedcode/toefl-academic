@@ -502,10 +502,10 @@ export default function Dashboard() {
                     </>
                   ) : (
                     <>
-                      <p className="text-xs text-muted-foreground">You'll be redirected to Paystack to complete your card payment securely.</p>
+                      <p className="text-xs text-muted-foreground">You'll be taken to a secure page to complete your card payment.</p>
                       <Button variant="gold" className="w-full" onClick={payWithCard} disabled={cardBusy}>
                         {cardBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CreditCard className="w-4 h-4 mr-2" />}
-                        {cardBusy ? "Redirecting…" : `Pay KES ${amount_kes.toLocaleString()} with Card`}
+                        {cardBusy ? "Processing…" : `Pay KES ${amount_kes.toLocaleString()} with Card`}
                       </Button>
                     </>
                   )}
