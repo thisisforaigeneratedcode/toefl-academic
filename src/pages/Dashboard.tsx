@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { LEVELS, LevelCode, KES_RATE } from "@/lib/levels";
+import { FEATURES } from "@/lib/features";
 import { useCurrency } from "@/hooks/useCurrency";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -37,7 +38,7 @@ export default function Dashboard() {
   const [payPhone, setPayPhone] = useState("");
   const [payPhase, setPayPhase] = useState<PayPhase>("input");
   const [payError, setPayError] = useState("");
-  const [payMethod, setPayMethod] = useState<"mpesa" | "card">("mpesa");
+  const [payMethod, setPayMethod] = useState<"mpesa" | "card">(FEATURES.pretium ? "mpesa" : "card");
   const [cardBusy, setCardBusy] = useState(false);
   const [awaitSeconds, setAwaitSeconds] = useState(0);
   const awaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -162,7 +163,7 @@ export default function Dashboard() {
     setPayPhone(booking.phone ?? profile?.phone ?? "");
     setPayPhase(booking.payment_status === "pending" ? "awaiting" : "input");
     setPayError("");
-    setPayMethod("mpesa");
+    setPayMethod(FEATURES.pretium ? "mpesa" : "card");
     setAwaitSeconds(0);
   };
 
@@ -344,14 +345,16 @@ export default function Dashboard() {
                           </Button>
                         )
                       ) : unpaid ? (
-                        b.payment_status === "pending" ? (
+                        FEATURES.pretium && b.payment_status === "pending" ? (
                           <Button size="sm" variant="outline" onClick={() => openPayModal(b)}>
                             <Clock className="w-3 h-3 mr-1 animate-pulse text-amber-500" /> Awaiting M-Pesa…
                           </Button>
                         ) : (
                           <Button size="sm" variant="gold" onClick={() => openPayModal(b)}>
-                            <Smartphone className="w-3 h-3 mr-1" />
-                            {b.payment_status === "failed" ? "Retry payment" : "Pay via M-Pesa"}
+                            {FEATURES.pretium
+                              ? <><Smartphone className="w-3 h-3 mr-1" />{b.payment_status === "failed" ? "Retry payment" : "Pay via M-Pesa"}</>
+                              : <><CreditCard className="w-3 h-3 mr-1" />Pay with card</>
+                            }
                           </Button>
                         )
                       ) : (
@@ -400,7 +403,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {payPhase === "awaiting" && (
+          {FEATURES.pretium && payPhase === "awaiting" && (
             <div className="flex flex-col items-center gap-5 py-8">
               <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
                 <Smartphone className="w-8 h-8 text-green-600" />
@@ -453,23 +456,25 @@ export default function Dashboard() {
                     <div className="text-xs text-muted-foreground mt-0.5">{format(new Date(payingBooking.scheduled_at), "PPp")}</div>
                   </div>
 
-                  {/* Payment method selector */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPayMethod("mpesa")}
-                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-sm font-medium transition-colors ${payMethod === "mpesa" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
-                    >
-                      <Smartphone className="w-4 h-4" /> M-Pesa
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPayMethod("card")}
-                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-sm font-medium transition-colors ${payMethod === "card" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
-                    >
-                      <CreditCard className="w-4 h-4" /> Card
-                    </button>
-                  </div>
+                  {/* Payment method selector — only shown when Pretium is enabled */}
+                  {FEATURES.pretium && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPayMethod("mpesa")}
+                        className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-sm font-medium transition-colors ${payMethod === "mpesa" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                      >
+                        <Smartphone className="w-4 h-4" /> M-Pesa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPayMethod("card")}
+                        className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border text-sm font-medium transition-colors ${payMethod === "card" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                      >
+                        <CreditCard className="w-4 h-4" /> Card
+                      </button>
+                    </div>
+                  )}
 
                   {payPhase === "failed" && (
                     <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 p-3">
@@ -478,7 +483,7 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  {payMethod === "mpesa" ? (
+                  {FEATURES.pretium && payMethod === "mpesa" ? (
                     <>
                       <div>
                         <Label className="text-sm">Your M-Pesa number</Label>
