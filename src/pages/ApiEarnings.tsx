@@ -62,7 +62,7 @@ export default function ApiEarnings() {
 
   const mpesaPending  = 0; // managed manually via admin wallet
   const cardPending   = cardEarned; // never auto-settled — always manual
-  const pending       = Math.max(0, totalEarned - totalSettled);
+  const pending       = mpesaPending;
   const isReady       = mpesaPending >= AUTO_SETTLE_THRESHOLD;
 
   const handleSettle = async () => {
@@ -99,7 +99,7 @@ export default function ApiEarnings() {
             <p className="text-sm text-muted-foreground mb-1">Total pending earnings</p>
             <p className="text-4xl font-bold text-primary">KES {pending.toLocaleString()}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              KES {totalEarned.toLocaleString()} earned all-time · KES {totalSettled.toLocaleString()} settled
+              KES {mpesaEarned.toLocaleString()} M-Pesa earned · KES {totalSettled.toLocaleString()} settled
             </p>
           </div>
           <button
