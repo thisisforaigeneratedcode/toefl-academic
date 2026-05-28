@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { LEVELS, LevelCode } from "@/lib/levels";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { ShieldCheck, Wallet, RefreshCw, Loader2, Smartphone, Info, MessageCircle, UserPlus } from "lucide-react";
+import { ShieldCheck, Wallet, RefreshCw, Loader2, Smartphone, Info, MessageCircle, UserPlus, Award } from "lucide-react";
 import AdminChat from "@/components/AdminChat";
 import AdminManualBooking from "@/components/AdminManualBooking";
 import { pretiumDisburseFee } from "@/lib/pretium";
@@ -34,6 +34,14 @@ export default function Admin() {
   const [attempts, setAttempts] = useState<any[]>([]);
   const [certs, setCerts] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
+
+  // Manual cert issuance
+  const [certUserSearch, setCertUserSearch] = useState("");
+  const [certUserId, setCertUserId] = useState("");
+  const [certLevel, setCertLevel] = useState<LevelCode>("B1");
+  const [certBand, setCertBand] = useState("Pass");
+  const [certNotes, setCertNotes] = useState("");
+  const [certBusy, setCertBusy] = useState(false);
   const [apicosts, setApicosts] = useState<any[]>([]);
 
   // Wallet tab state
@@ -171,6 +179,31 @@ export default function Admin() {
     refresh();
   };
 
+  const issueCertManually = async () => {
+    if (!certUserId) { toast.error("Select a user first"); return; }
+    setCertBusy(true);
+    try {
+      const { data: booking, error: bErr } = await supabase.from("bookings").insert({
+        user_id: certUserId,
+        level: certLevel,
+        scheduled_at: new Date().toISOString(),
+        status: "completed",
+        payment_status: "completed",
+        amount_kes: 0,
+      }).select().single();
+      if (bErr) throw bErr;
+      const { error } = await supabase.functions.invoke("approve-attempt", {
+        body: { booking_id: booking.id, decision: "approve", band: certBand, notes: certNotes },
+      });
+      if (error) throw error;
+      toast.success(`Certificate issued — ${certBand}`);
+      setCertUserId(""); setCertUserSearch(""); setCertNotes("");
+      refresh();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally { setCertBusy(false); }
+  };
+
   const revokeCert = async (id: string, current: boolean) => {
     await supabase.from("certificates").update({ revoked: !current }).eq("id", id);
     refresh();
@@ -199,6 +232,7 @@ export default function Admin() {
             <TabsTrigger value="certificates">Certificates</TabsTrigger>
             <TabsTrigger value="questions">Question Bank</TabsTrigger>
             <TabsTrigger value="chat"><MessageCircle className="w-3 h-3 mr-1" />Chat</TabsTrigger>
+            <TabsTrigger value="issue"><Award className="w-3 h-3 mr-1" />Issue cert</TabsTrigger>
             <TabsTrigger value="wallet"><Wallet className="w-3 h-3 mr-1" />Wallet</TabsTrigger>
           </TabsList>
 
@@ -262,6 +296,87 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="issue">
+            <Card className="p-6 max-w-lg space-y-5">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-primary mb-1">Issue certificate manually</h3>
+                <p className="text-xs text-muted-foreground">Search by email, pick level and band, then issue. A booking record is created automatically.</p>
+              </div>
+
+              <div>
+                <Label className="text-xs">Search user by email</Label>
+                <Input
+                  placeholder="candidate@email.com"
+                  value={certUserSearch}
+                  onChange={(e) => { setCertUserSearch(e.target.value); setCertUserId(""); }}
+                  className="mt-1"
+                />
+                {certUserSearch.length > 1 && !certUserId && (
+                  <div className="border border-border rounded-md mt-1 max-h-48 overflow-y-auto divide-y divide-border">
+                    {users.filter(u =>
+                      u.email?.toLowerCase().includes(certUserSearch.toLowerCase()) ||
+                      u.full_name?.toLowerCase().includes(certUserSearch.toLowerCase())
+                    ).slice(0, 8).map(u => (
+                      <button
+                        key={u.id}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                        onClick={() => { setCertUserId(u.id); setCertUserSearch(`${u.full_name} — ${u.email}`); }}
+                      >
+                        <span className="font-medium">{u.full_name}</span>
+                        <span className="text-muted-foreground ml-2 text-xs">{u.email}</span>
+                      </button>
+                    ))}
+                    {users.filter(u =>
+                      u.email?.toLowerCase().includes(certUserSearch.toLowerCase()) ||
+                      u.full_name?.toLowerCase().includes(certUserSearch.toLowerCase())
+                    ).length === 0 && (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">No users found</p>
+                    )}
+                  </div>
+                )}
+                {certUserId && (
+                  <p className="text-xs text-green-600 mt-1">✓ User selected</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Level</Label>
+                  <Select value={certLevel} onValueChange={(v) => setCertLevel(v as LevelCode)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>{LEVELS.map(l => <SelectItem key={l.code} value={l.code}>{l.code} — {l.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Band</Label>
+                  <Select value={certBand} onValueChange={setCertBand}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pass">Pass</SelectItem>
+                      <SelectItem value="Pass with Merit">Pass with Merit</SelectItem>
+                      <SelectItem value="Distinction">Distinction</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Examiner note (optional)</Label>
+                <Input
+                  placeholder="e.g. Issued following prior assessment."
+                  value={certNotes}
+                  onChange={(e) => setCertNotes(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+
+              <Button variant="gold" onClick={issueCertManually} disabled={certBusy || !certUserId}>
+                {certBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Award className="w-4 h-4 mr-2" />}
+                Issue certificate
+              </Button>
             </Card>
           </TabsContent>
 
