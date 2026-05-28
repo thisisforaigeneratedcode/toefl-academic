@@ -60,7 +60,7 @@ export default function ApiEarnings() {
   const totalSettled  = depositRows.filter(r => r.owner_withdrawn).reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0)
     + settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
 
-  const mpesaPending  = Math.max(0, mpesaEarned - totalSettled);
+  const mpesaPending  = 0; // managed manually via admin wallet
   const cardPending   = cardEarned; // never auto-settled — always manual
   const pending       = Math.max(0, totalEarned - totalSettled);
   const isReady       = mpesaPending >= AUTO_SETTLE_THRESHOLD;

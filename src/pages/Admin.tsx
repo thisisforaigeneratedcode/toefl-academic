@@ -108,7 +108,7 @@ export default function Admin() {
     let paystack_available = 0;
     let paystack_held = 0;
     for (const r of paystackDeposits) {
-      const net = r.transaction_amount_kes - r.pretium_fee_kes;
+      const net = r.transaction_amount_kes - r.pretium_fee_kes - r.api_earnings_kes;
       const releaseTime = addBusinessHours(new Date(r.created_at), 48);
       if (releaseTime <= now) paystack_available += net;
       else paystack_held += net;
