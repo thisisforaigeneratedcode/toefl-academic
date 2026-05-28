@@ -90,9 +90,11 @@ export default function Admin() {
     const mpesaDeposits   = deposits.filter((r) => !String(r.payment_id ?? "").startsWith("TA-"));
     const paystackDeposits = deposits.filter((r) => String(r.payment_id ?? "").startsWith("TA-"));
 
+    // available = M-Pesa net (after Pretium fee + our 8% cut) minus previous withdrawals
     const deposited_net   = mpesaDeposits.reduce((s: number, r: any) => s + r.transaction_amount_kes - r.pretium_fee_kes - r.api_earnings_kes, 0);
     const withdrawn_total = withdrawals.reduce((s: number, r: any) => s + r.transaction_amount_kes, 0);
     const available_to_withdraw_kes = Math.max(0, deposited_net - withdrawn_total);
+    const owner_earnings_kes = mpesaDeposits.reduce((s: number, r: any) => s + (r.owner_earnings_kes ?? r.api_earnings_kes ?? 0), 0);
 
     const now = new Date();
     let paystack_available = 0;

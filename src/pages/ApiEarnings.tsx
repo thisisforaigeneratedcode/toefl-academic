@@ -14,10 +14,10 @@ export default function ApiEarnings() {
   const { user, loading } = useAuth();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [apicosts, setApicosts] = useState<any[]>([]);
-  const [settling, setSettling] = useState<"owner" | "partner" | null>(null);
+  const [settling, setSettling] = useState(false);
   const [autoSettle, setAutoSettle] = useState(false);
   const [togglingAuto, setTogglingAuto] = useState(false);
-  const [withdrawAmounts, setWithdrawAmounts] = useState({ owner: "", partner: "" });
+  const [withdrawAmount, setWithdrawAmount] = useState("");
 
   const loadData = async () => {
     if (!user) return;
@@ -50,30 +50,29 @@ export default function ApiEarnings() {
   const depositRows    = apicosts.filter(r => r.type === "deposit");
   const settlementRows = apicosts.filter(r => r.type === "settlement");
 
-  const ownerEarned   = depositRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
-  const partnerEarned = depositRows.reduce((s, r) => s + (r.partner_earnings_kes ?? 0), 0);
+  const mpesaDeposits   = depositRows.filter(r => !String(r.payment_id ?? "").startsWith("TA-"));
+  const cardDeposits    = depositRows.filter(r => String(r.payment_id ?? "").startsWith("TA-"));
 
-  const ownerSettledViaRows   = depositRows.filter(r => r.owner_withdrawn).reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
-  const ownerSettledViaRecs   = settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
-  const partnerSettledViaRows = depositRows.filter(r => r.partner_withdrawn).reduce((s, r) => s + (r.partner_earnings_kes ?? 0), 0);
-  const partnerSettledViaRecs = settlementRows.reduce((s, r) => s + (r.partner_earnings_kes ?? 0), 0);
+  const mpesaEarned   = mpesaDeposits.reduce((s, r) => s + (r.api_earnings_kes ?? 0), 0);
+  const cardEarned    = cardDeposits.reduce((s, r) => s + (r.api_earnings_kes ?? 0), 0);
+  const totalEarned   = mpesaEarned + cardEarned;
 
-  const ownerSettled   = ownerSettledViaRows + ownerSettledViaRecs;
-  const partnerSettled = partnerSettledViaRows + partnerSettledViaRecs;
-  const ownerPending   = Math.max(0, ownerEarned - ownerSettled);
-  const partnerPending = Math.max(0, partnerEarned - partnerSettled);
+  const totalSettled  = depositRows.filter(r => r.owner_withdrawn).reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0)
+    + settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
 
-  const totalEarned = depositRows.reduce((s, r) => s + (r.api_earnings_kes ?? 0), 0);
+  const mpesaPending  = Math.max(0, mpesaEarned - totalSettled);
+  const cardPending   = cardEarned; // never auto-settled — always manual
+  const pending       = Math.max(0, totalEarned - totalSettled);
+  const isReady       = mpesaPending >= AUTO_SETTLE_THRESHOLD;
 
-  const handleSettle = async (target: "owner" | "partner") => {
-    const pending = target === "owner" ? ownerPending : partnerPending;
+  const handleSettle = async () => {
     if (pending <= 0) return;
-    const amount = Number(withdrawAmounts[target]) || pending;
-    setSettling(target);
+    const amount = Number(withdrawAmount) || pending;
+    setSettling(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const { data, error } = await supabase.functions.invoke("withdraw-api-costs", {
-        body: { target, amount },
+        body: { target: "owner", amount },
         headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
       });
       if (error || data?.error) throw new Error(data?.error ?? error?.message);
@@ -82,7 +81,7 @@ export default function ApiEarnings() {
     } catch (e: any) {
       toast.error(e.message ?? "Settlement failed");
     }
-    setSettling(null);
+    setSettling(false);
   };
 
   if (loading || authorized === null) {
@@ -97,9 +96,11 @@ export default function ApiEarnings() {
 
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm text-muted-foreground mb-1">Pending</p>
-            <p className="text-4xl font-bold text-primary">KES {(ownerPending + partnerPending).toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">Unsettled API earnings · {totalEarned.toLocaleString()} earned all-time</p>
+            <p className="text-sm text-muted-foreground mb-1">Total pending earnings</p>
+            <p className="text-4xl font-bold text-primary">KES {pending.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              KES {totalEarned.toLocaleString()} earned all-time · KES {totalSettled.toLocaleString()} settled
+            </p>
           </div>
           <button
             onClick={toggleAutoSettle}
@@ -112,73 +113,66 @@ export default function ApiEarnings() {
           </button>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4 mb-10">
-          {(["owner", "partner"] as const).map((target) => {
-            const pending  = target === "owner" ? ownerPending  : partnerPending;
-            const settled  = target === "owner" ? ownerSettled  : partnerSettled;
-            const isReady  = pending >= AUTO_SETTLE_THRESHOLD;
+        {/* Card earnings — manual deduction reminder */}
+        {cardPending > 0 && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 mb-4">
+            <p className="text-sm font-semibold text-blue-800">Card payments (Paystack)</p>
+            <p className="text-2xl font-bold text-blue-700 mt-1">KES {cardPending.toLocaleString()}</p>
+            <p className="text-xs text-blue-600 mt-1">
+              Deduct this from your next Paystack bank transfer — this is your 8% cut from card payments.
+            </p>
+          </div>
+        )}
 
-            return (
-              <div key={target} className="rounded-xl border border-border bg-secondary/20 p-5 space-y-3">
-                <div>
-                  <p className="text-sm font-semibold">{target === "owner" ? "Brian (60%)" : "Evans (40%)"}</p>
-                  <p className="text-2xl font-bold text-primary mt-1">KES {(settled + pending).toLocaleString()}</p>
-                  <div className="flex gap-4 text-xs text-muted-foreground mt-1">
-                    <span>Settled <strong className="text-primary">KES {settled.toLocaleString()}</strong></span>
-                    <span>{isReady ? "Ready" : "Accumulating"} <strong className="text-primary">KES {pending.toLocaleString()}</strong></span>
+        {/* M-Pesa earnings — settleable via Pretium */}
+        {mpesaPending > 0 && (
+          <div className="rounded-xl border border-border bg-secondary/20 p-5 space-y-3 mb-10">
+            <div>
+              <p className="text-sm font-semibold">M-Pesa earnings (Pretium)</p>
+              <p className="text-2xl font-bold text-primary mt-1">KES {mpesaPending.toLocaleString()}</p>
+            </div>
+            {!isReady && (
+              <p className="text-xs text-muted-foreground">
+                KES {(AUTO_SETTLE_THRESHOLD - mpesaPending).toLocaleString()} until auto-settle threshold
+              </p>
+            )}
+            <div className="border-t border-border pt-3 space-y-2">
+              <label className="text-xs text-muted-foreground">Amount to withdraw (KES)</label>
+              <input
+                type="number"
+                min={1}
+                max={mpesaPending}
+                value={withdrawAmount}
+                onChange={e => setWithdrawAmount(e.target.value)}
+                placeholder={mpesaPending.toLocaleString()}
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+              />
+              {(() => {
+                const amt = Math.min(Number(withdrawAmount) || mpesaPending, mpesaPending);
+                const f   = pretiumDisburseFee(amt);
+                const r   = Math.max(0, amt - f);
+                return (
+                  <div className="text-xs space-y-0.5 text-muted-foreground">
+                    <div className="flex justify-between"><span>Pretium fee</span><span>− KES {f.toLocaleString()}</span></div>
+                    <div className="flex justify-between font-semibold text-primary border-t border-border pt-1 mt-1">
+                      <span>Will receive</span><span>KES {r.toLocaleString()}</span>
+                    </div>
                   </div>
-                  {pending > 0 && !isReady && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      KES {(AUTO_SETTLE_THRESHOLD - pending).toLocaleString()} until auto-settle
-                    </p>
-                  )}
-                </div>
-
-                {pending > 0 && (
-                  <>
-                    <div className="border-t border-border pt-2">
-                      <label className="text-xs text-muted-foreground">Amount to withdraw (KES)</label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={pending}
-                        value={withdrawAmounts[target]}
-                        onChange={e => setWithdrawAmounts(a => ({ ...a, [target]: e.target.value }))}
-                        placeholder={pending.toLocaleString()}
-                        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-                      />
-                    </div>
-                    <div className="text-xs space-y-0.5 text-muted-foreground">
-                      {(() => {
-                        const amt = Math.min(Number(withdrawAmounts[target]) || pending, pending);
-                        const f   = pretiumDisburseFee(amt);
-                        const r   = Math.max(0, amt - f);
-                        return (
-                          <>
-                            <div className="flex justify-between"><span>Pretium fee</span><span>− KES {f.toLocaleString()}</span></div>
-                            <div className="flex justify-between font-semibold text-primary border-t border-border pt-1 mt-1">
-                              <span>Will receive</span><span>KES {r.toLocaleString()}</span>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    <button
-                      onClick={() => handleSettle(target)}
-                      disabled={settling !== null || pending <= 0}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 w-full justify-center"
-                    >
-                      {settling === target
-                        ? <><Loader2 size={13} className="animate-spin" /> Settling…</>
-                        : <><Smartphone size={13} /> Settle to M-Pesa</>
-                      }
-                    </button>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })()}
+              <button
+                onClick={handleSettle}
+                disabled={settling || mpesaPending <= 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 w-full justify-center"
+              >
+                {settling
+                  ? <><Loader2 size={13} className="animate-spin" /> Settling…</>
+                  : <><Smartphone size={13} /> Settle to M-Pesa</>
+                }
+              </button>
+            </div>
+          </div>
+        )}
 
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground mb-4">Transactions</p>
@@ -188,19 +182,28 @@ export default function ApiEarnings() {
             <div className="divide-y divide-border">
               {apicosts.map((r) => {
                 const isDeposit = r.type === "deposit";
+                const isCard = typeof r.payment_id === "string" && r.payment_id.startsWith("TA-");
+                const feeLabel = isCard ? "Card fee (1.5%)" : "M-Pesa fee (2%)";
                 const net = r.transaction_amount_kes - r.pretium_fee_kes;
                 return (
                   <div key={r.id} className="py-4 flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-medium text-primary">
-                        {isDeposit ? "Exam payment" : "Admin withdrawal"}
+                      <p className="text-sm font-medium text-primary flex items-center gap-2">
+                        {isDeposit ? "Exam payment" : "Withdrawal"}
+                        {isDeposit && (
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            isCard ? "text-blue-700 border-blue-300" : "text-green-700 border-green-300"
+                          }`}>
+                            {isCard ? "Card" : "M-Pesa"}
+                          </span>
+                        )}
                       </p>
                       {isDeposit && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           KES {r.transaction_amount_kes?.toLocaleString()} in
-                          {" "}· Pretium 2% −KES {r.pretium_fee_kes?.toLocaleString()}
+                          {" "}· {feeLabel} −KES {r.pretium_fee_kes?.toLocaleString()}
                           {" "}· net KES {net.toLocaleString()}
-                          {" "}· API cost (8%) KES {r.api_earnings_kes?.toLocaleString()}
+                          {" "}· cut (8%) KES {r.api_earnings_kes?.toLocaleString()}
                         </p>
                       )}
                       <p className="text-xs text-muted-foreground">
@@ -208,17 +211,11 @@ export default function ApiEarnings() {
                       </p>
                     </div>
                     {isDeposit && (
-                      <div className="text-right shrink-0 space-y-0.5">
+                      <div className="text-right shrink-0">
                         <p className="text-xs text-muted-foreground">
-                          Mine: <span className="font-semibold text-primary">+KES {r.owner_earnings_kes?.toLocaleString()}</span>
+                          Earnings: <span className="font-semibold text-primary">+KES {r.owner_earnings_kes?.toLocaleString()}</span>
                           <span className={`ml-1 ${r.owner_withdrawn ? "text-green-600" : "text-muted-foreground"}`}>
-                            {r.owner_withdrawn ? "✓" : "·"}
-                          </span>
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Partner: <span className="font-semibold text-primary">+KES {r.partner_earnings_kes?.toLocaleString()}</span>
-                          <span className={`ml-1 ${r.partner_withdrawn ? "text-green-600" : "text-muted-foreground"}`}>
-                            {r.partner_withdrawn ? "✓" : "·"}
+                            {r.owner_withdrawn ? "✓ settled" : "· pending"}
                           </span>
                         </p>
                       </div>

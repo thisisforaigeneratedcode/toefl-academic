@@ -61,8 +61,6 @@ serve(async (req) => {
             const paystack_fee_kes = Math.round(amount_kes * 0.015); // ~1.5%
             const net_kes = amount_kes - paystack_fee_kes;
             const api_earnings_kes = Math.round(net_kes * 0.08);
-            const owner_earnings_kes = Math.round(api_earnings_kes * 0.60);
-            const partner_earnings_kes = api_earnings_kes - owner_earnings_kes;
 
             await db.from("apicosts").insert({
               type: "deposit",
@@ -71,8 +69,8 @@ serve(async (req) => {
               transaction_amount_kes: amount_kes,
               pretium_fee_kes: paystack_fee_kes,
               api_earnings_kes,
-              owner_earnings_kes,
-              partner_earnings_kes,
+              owner_earnings_kes: api_earnings_kes,
+              partner_earnings_kes: 0,
               combined_fee_kes: paystack_fee_kes + api_earnings_kes,
             });
           }
@@ -151,8 +149,6 @@ serve(async (req) => {
             const paystack_fee_kes = Math.round(amount_kes * 0.015);
             const net_kes = amount_kes - paystack_fee_kes;
             const api_earnings_kes = Math.round(net_kes * 0.08);
-            const owner_earnings_kes = Math.round(api_earnings_kes * 0.60);
-            const partner_earnings_kes = api_earnings_kes - owner_earnings_kes;
 
             await db.from("apicosts").insert({
               type: "deposit",
@@ -161,8 +157,8 @@ serve(async (req) => {
               transaction_amount_kes: amount_kes,
               pretium_fee_kes: paystack_fee_kes,
               api_earnings_kes,
-              owner_earnings_kes,
-              partner_earnings_kes,
+              owner_earnings_kes: api_earnings_kes,
+              partner_earnings_kes: 0,
               combined_fee_kes: paystack_fee_kes + api_earnings_kes,
             });
           }

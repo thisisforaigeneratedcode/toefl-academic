@@ -120,8 +120,8 @@ serve(async (req) => {
     const pretium_fee_kes = Math.round(amount_kes * 0.02);
     const net_kes = amount_kes - pretium_fee_kes;
     const api_earnings_kes = Math.round(net_kes * 0.08);
-    const owner_earnings_kes = Math.round(api_earnings_kes * 0.60);
-    const partner_earnings_kes = api_earnings_kes - owner_earnings_kes;
+    const owner_earnings_kes = api_earnings_kes;
+    const partner_earnings_kes = 0;
 
     await Promise.all([
       db.from("bookings").update({
