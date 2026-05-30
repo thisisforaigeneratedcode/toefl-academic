@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendEmail, buildEmail } from "../_shared/email.ts";
+
+const LEVEL_NAMES: Record<string, string> = {
+  A2: "Elementary (A2)", B1: "Intermediate (B1)", B2: "Upper-Intermediate (B2)",
+  C1: "Advanced (C1)", C2: "Proficient (C2)",
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,6 +96,39 @@ serve(async (req) => {
         approved_at: new Date().toISOString(),
         graded_at: new Date().toISOString(),
       }).eq("id", attempt_id);
+
+      // Rejection email
+      const { data: rejProfile } = await admin.from("profiles").select("full_name, email").eq("id", attempt.user_id).maybeSingle();
+      const rejEmail = rejProfile?.email;
+      if (rejEmail) {
+        const rejName = rejProfile?.full_name?.split(" ")[0] ?? "Candidate";
+        const appUrl = Deno.env.get("APP_URL") ?? "https://toeflacademic.com";
+        const levelName = LEVEL_NAMES[attempt.level] ?? attempt.level;
+        const notesHtml = notes
+          ? `<p style="color:#374151;font-size:14px;line-height:1.6;background:#fef3c7;border-left:3px solid #f59e0b;padding:10px 14px;border-radius:4px;"><strong>Reviewer notes:</strong> ${notes}</p>`
+          : "";
+        const rejBody = `
+          <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${rejName},</p>
+          <p style="color:#374151;font-size:15px;line-height:1.6;">Thank you for completing your <strong>${levelName}</strong> exam. Unfortunately, your attempt did not meet the passing standard on this occasion.</p>
+          ${notesHtml}
+          <p style="color:#374151;font-size:15px;line-height:1.6;">You may be eligible to retry — head to your dashboard to check your remaining attempts. We encourage you to review your responses and try again.</p>
+        `;
+        await sendEmail({
+          to: rejEmail,
+          subject: "Your TOEFL Academic Results",
+          html: buildEmail({
+            heading: "Result: Did Not Pass",
+            body: rejBody,
+            ctaLabel: "Return to Dashboard",
+            ctaUrl: `${appUrl}/dashboard`,
+            footerLink1Label: "My Dashboard",
+            footerLink1Url: `${appUrl}/dashboard`,
+            footerLink2Label: "Contact Support",
+            footerLink2Url: `mailto:support@toeflacademic.com`,
+          }),
+        });
+      }
+
       return new Response(JSON.stringify({ ok: true, decision: "rejected" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -146,6 +185,87 @@ serve(async (req) => {
       approved_at: new Date().toISOString(),
       graded_at: new Date().toISOString(),
     }).eq("id", attempt_id);
+
+    // Certificate / approval email — covers normal approval, manual "Issue cert" tab,
+    // and "Issue without submission" (BookingIssue) — all paths arrive here.
+    const { data: appProfile } = await admin.from("profiles").select("full_name, email").eq("id", attempt.user_id).maybeSingle();
+    const appEmail = appProfile?.email;
+    if (appEmail) {
+      const appName = appProfile?.full_name?.split(" ")[0] ?? "Candidate";
+      const appUrl = Deno.env.get("APP_URL") ?? "https://toeflacademic.com";
+      const levelName = LEVEL_NAMES[attempt.level] ?? attempt.level;
+
+      // Fetch the certificate row we just created (or the pre-existing one)
+      const { data: cert } = await admin.from("certificates")
+        .select("listening_pct,reading_pct,speaking_pct,writing_pct,overall_pct,valid_until")
+        .eq("certificate_number", certificate_number)
+        .maybeSingle();
+
+      const validUntil = cert?.valid_until
+        ? new Date(cert.valid_until).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+        : "";
+
+      const skillsTable = cert ? `
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <tr style="background:#f9fafb;">
+            <th style="padding:8px 12px;text-align:left;color:#6b7280;font-weight:500;">Skill</th>
+            <th style="padding:8px 12px;text-align:right;color:#6b7280;font-weight:500;">Score</th>
+          </tr>
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:10px 12px;color:#374151;">Listening</td>
+            <td style="padding:10px 12px;text-align:right;color:#111827;font-weight:600;">${cert.listening_pct}%</td>
+          </tr>
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:10px 12px;color:#374151;">Reading</td>
+            <td style="padding:10px 12px;text-align:right;color:#111827;font-weight:600;">${cert.reading_pct}%</td>
+          </tr>
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:10px 12px;color:#374151;">Speaking</td>
+            <td style="padding:10px 12px;text-align:right;color:#111827;font-weight:600;">${cert.speaking_pct}%</td>
+          </tr>
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:10px 12px;color:#374151;">Writing</td>
+            <td style="padding:10px 12px;text-align:right;color:#111827;font-weight:600;">${cert.writing_pct}%</td>
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td style="padding:10px 12px;color:#111827;font-weight:700;">Overall</td>
+            <td style="padding:10px 12px;text-align:right;color:#16a34a;font-weight:700;">${cert.overall_pct}%</td>
+          </tr>
+        </table>
+      ` : "";
+
+      const appBody = `
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${appName},</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Your <strong>${levelName}</strong> exam has been reviewed. We're pleased to inform you that you have <strong>passed</strong> with a grade of <strong>${finalBand}</strong>.</p>
+        ${skillsTable}
+        <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:8px;">
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td style="padding:10px 0;color:#6b7280;width:45%;">Certificate number</td>
+            <td style="padding:10px 0;color:#111827;font-family:monospace;font-weight:600;">${certificate_number}</td>
+          </tr>
+          ${validUntil ? `<tr>
+            <td style="padding:10px 0;color:#6b7280;">Valid until</td>
+            <td style="padding:10px 0;color:#111827;">${validUntil}</td>
+          </tr>` : ""}
+        </table>
+        <p style="color:#374151;font-size:14px;line-height:1.6;">Your certificate can be verified publicly at <a href="${appUrl}/verify/${certificate_number}" style="color:#4f46e5;">${appUrl}/verify/${certificate_number}</a>.</p>
+      `;
+
+      await sendEmail({
+        to: appEmail,
+        subject: "Your TOEFL Academic Certificate is Ready",
+        html: buildEmail({
+          heading: `Congratulations, ${appName}! You passed.`,
+          body: appBody,
+          ctaLabel: "Download Certificate",
+          ctaUrl: `${appUrl}/certificate/${certificate_number}`,
+          footerLink1Label: "Download Certificate",
+          footerLink1Url: `${appUrl}/certificate/${certificate_number}`,
+          footerLink2Label: "My Dashboard",
+          footerLink2Url: `${appUrl}/dashboard`,
+        }),
+      });
+    }
 
     return new Response(JSON.stringify({ ok: true, decision: "approved", certificate_number }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

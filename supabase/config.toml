@@ -1,10 +1,25 @@
 project_id = "sjzrajrwngkpezzuwudh"
 
 [functions.start-exam]
-verify_jwt = true
+verify_jwt = false
 
 [functions.submit-exam]
-verify_jwt = true
+verify_jwt = false
+
+[functions.approve-attempt]
+verify_jwt = false
 
 [functions.pretium-webhook]
+verify_jwt = false
+
+[functions.paystack]
+verify_jwt = false
+
+[functions.send-welcome]
+verify_jwt = false
+
+[functions.send-booking-confirmation]
+verify_jwt = false
+
+[functions.cert-expiry-reminder]
 verify_jwt = false

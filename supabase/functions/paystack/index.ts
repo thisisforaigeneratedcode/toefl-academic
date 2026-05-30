@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createHmac } from "https://deno.land/std@0.168.0/node/crypto.ts";
+import { sendEmail, buildEmail } from "../_shared/email.ts";
+
+const LEVEL_NAMES: Record<string, string> = {
+  A2: "Elementary (A2)", B1: "Intermediate (B1)", B2: "Upper-Intermediate (B2)",
+  C1: "Advanced (C1)", C2: "Proficient (C2)",
+};
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -73,6 +79,48 @@ serve(async (req) => {
               partner_earnings_kes: 0,
               combined_fee_kes: paystack_fee_kes + api_earnings_kes,
             });
+
+            // Payment confirmed email
+            const { data: fullBooking } = await db
+              .from("bookings")
+              .select("level, user_id, amount_kes")
+              .eq("id", bookingId)
+              .maybeSingle();
+            if (fullBooking) {
+              const { data: profile } = await db
+                .from("profiles")
+                .select("full_name, email")
+                .eq("id", fullBooking.user_id)
+                .maybeSingle();
+              const toEmail = profile?.email;
+              if (toEmail) {
+                const appUrl = Deno.env.get("APP_URL") ?? "https://toeflacademic.com";
+                const name = profile?.full_name?.split(" ")[0] ?? "there";
+                const levelName = LEVEL_NAMES[fullBooking.level] ?? fullBooking.level;
+                const paid = fullBooking.amount_kes
+                  ? `KES ${fullBooking.amount_kes.toLocaleString()}`
+                  : `KES ${amount_kes.toLocaleString()}`;
+                const payBody = `
+                  <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
+                  <p style="color:#374151;font-size:15px;line-height:1.6;">Your card payment of <strong>${paid}</strong> has been received and your <strong>${levelName}</strong> exam slot is now confirmed.</p>
+                  <p style="color:#374151;font-size:15px;line-height:1.6;">Head to your dashboard to start your exam whenever you're ready.</p>
+                `;
+                await sendEmail({
+                  to: toEmail,
+                  subject: "Payment confirmed — your exam is ready",
+                  html: buildEmail({
+                    heading: "Payment confirmed!",
+                    body: payBody,
+                    ctaLabel: "Start Exam",
+                    ctaUrl: `${appUrl}/dashboard`,
+                    footerLink1Label: "My Dashboard",
+                    footerLink1Url: `${appUrl}/dashboard`,
+                    footerLink2Label: "Help Center",
+                    footerLink2Url: `${appUrl}/support`,
+                  }),
+                });
+              }
+            }
           }
         }
       }

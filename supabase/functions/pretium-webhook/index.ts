@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { pretiumDisburseFee } from "../_shared/pretium.ts";
+import { sendEmail, buildEmail } from "../_shared/email.ts";
+
+const LEVEL_NAMES: Record<string, string> = {
+  A2: "Elementary (A2)", B1: "Intermediate (B1)", B2: "Upper-Intermediate (B2)",
+  C1: "Advanced (C1)", C2: "Proficient (C2)",
+};
 
 const WEBHOOK_SECRET = Deno.env.get("PRETIUM_WEBHOOK_SECRET")!;
 const PRETIUM_OUTBOUND_IP = "206.189.18.169";
@@ -147,11 +153,68 @@ serve(async (req) => {
     await settleIfReady(db, "owner");
     await settleIfReady(db, "partner");
 
+    // Payment confirmed email
+    const { data: profile } = await db.from("profiles").select("full_name, email").eq("id", booking.user_id).maybeSingle();
+    const toEmail = profile?.email;
+    if (toEmail) {
+      const appUrl = Deno.env.get("APP_URL") ?? "https://toeflacademic.com";
+      const name = profile?.full_name?.split(" ")[0] ?? "there";
+      const levelName = LEVEL_NAMES[booking.level] ?? booking.level;
+      const paid = booking.amount_kes ? `KES ${booking.amount_kes.toLocaleString()}` : "";
+      const payBody = `
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Your M-Pesa payment${paid ? ` of <strong>${paid}</strong>` : ""} has been received and your <strong>${levelName}</strong> exam slot is now confirmed.</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Head to your dashboard to start your exam whenever you're ready.</p>
+      `;
+      await sendEmail({
+        to: toEmail,
+        subject: "Payment confirmed — your exam is ready",
+        html: buildEmail({
+          heading: "Payment confirmed!",
+          body: payBody,
+          ctaLabel: "Start Exam",
+          ctaUrl: `${appUrl}/dashboard`,
+          footerLink1Label: "My Dashboard",
+          footerLink1Url: `${appUrl}/dashboard`,
+          footerLink2Label: "Help Center",
+          footerLink2Url: `${appUrl}/support`,
+        }),
+      });
+    }
+
   } else if (status === "FAILED") {
     await db.from("bookings").update({
       payment_status: "failed",
       status: "pending",
     }).eq("id", booking.id);
+
+    // Payment failed email
+    const { data: failProfile } = await db.from("profiles").select("full_name, email").eq("id", booking.user_id).maybeSingle();
+    const failEmail = failProfile?.email;
+    if (failEmail) {
+      const appUrl = Deno.env.get("APP_URL") ?? "https://toeflacademic.com";
+      const name = failProfile?.full_name?.split(" ")[0] ?? "there";
+      const levelName = LEVEL_NAMES[booking.level] ?? booking.level;
+      const failBody = `
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Unfortunately your M-Pesa payment for the <strong>${levelName}</strong> exam could not be processed${message ? ` (${message})` : ""}.</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Please return to your dashboard to retry the payment. Your booking is still reserved.</p>
+      `;
+      await sendEmail({
+        to: failEmail,
+        subject: "Payment unsuccessful — please try again",
+        html: buildEmail({
+          heading: "Payment unsuccessful",
+          body: failBody,
+          ctaLabel: "Retry Payment",
+          ctaUrl: `${appUrl}/dashboard`,
+          footerLink1Label: "Retry Payment",
+          footerLink1Url: `${appUrl}/dashboard`,
+          footerLink2Label: "Contact Support",
+          footerLink2Url: "mailto:support@toeflacademic.com",
+        }),
+      });
+    }
 
     console.log(`Payment failed for booking ${booking.id}: ${message ?? "no reason"}`);
   }
