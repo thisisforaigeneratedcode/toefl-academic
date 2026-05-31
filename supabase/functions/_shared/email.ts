@@ -48,9 +48,9 @@ export function buildEmail(opts: {
   const fl2Label = opts.footerLink2Label ?? "Help Center";
   const fl2Url = opts.footerLink2Url ?? `${appUrl}/support`;
 
-  // Real hosted SVG tile — works in Apple Mail, Outlook Mac, Thunderbird.
-  // Gmail web strips background-image but falls back gracefully to solid #0d1117.
-  const bgTileUrl = `${appUrl}/email-bg.svg`;
+  // Real hosted PNG tile — PNG works in far more email clients than SVG.
+  // Falls back to solid #0d1117 in clients that block remote images.
+  const bgTileUrl = `${appUrl}/email-bg.png`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -73,8 +73,9 @@ export function buildEmail(opts: {
 
           <!-- logo -->
           <tr>
-            <td align="center" style="padding:32px 40px 24px;border-bottom:1px solid #f0f0f0;background:#0C1A35;border-radius:8px 8px 0 0;">
-              <img src="${appUrl}/logo.png" alt="TOEFL Academic" width="80" height="80" style="display:block;border-radius:50%;" />
+            <td align="center" style="padding:28px 40px 20px;border-bottom:1px solid #f0f0f0;background:#1E1D4C;border-radius:8px 8px 0 0;">
+              <img src="${appUrl}/email-logo.png" alt="TOEFL Academic" width="64" height="64" style="display:block;border-radius:8px;" />
+              <p style="margin:10px 0 0;color:#EEE9DC;font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase;">TOEFL Academic</p>
             </td>
           </tr>
 
