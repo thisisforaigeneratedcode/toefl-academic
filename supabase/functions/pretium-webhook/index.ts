@@ -163,7 +163,7 @@ serve(async (req) => {
       const paid = booking.amount_kes ? `KES ${booking.amount_kes.toLocaleString()}` : "";
       const payBody = `
         <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
-        <p style="color:#374151;font-size:15px;line-height:1.6;">Your M-Pesa payment${paid ? ` of <strong>${paid}</strong>` : ""} has been received and your <strong>${levelName}</strong> exam slot is now confirmed.</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Your payment${paid ? ` of <strong>${paid}</strong>` : ""} has been received and your <strong>${levelName}</strong> exam slot is now confirmed.</p>
         <p style="color:#374151;font-size:15px;line-height:1.6;">Head to your dashboard to start your exam whenever you're ready.</p>
       `;
       await sendEmail({
@@ -197,7 +197,7 @@ serve(async (req) => {
       const levelName = LEVEL_NAMES[booking.level] ?? booking.level;
       const failBody = `
         <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
-        <p style="color:#374151;font-size:15px;line-height:1.6;">Unfortunately your M-Pesa payment for the <strong>${levelName}</strong> exam could not be processed${message ? ` (${message})` : ""}.</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Unfortunately your payment for the <strong>${levelName}</strong> exam could not be processed. Please return to your dashboard to complete payment using your preferred method.</p>
         <p style="color:#374151;font-size:15px;line-height:1.6;">Please return to your dashboard to retry the payment. Your booking is still reserved.</p>
       `;
       await sendEmail({

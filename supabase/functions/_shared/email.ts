@@ -62,8 +62,8 @@ export function buildEmail(opts: {
 <body style="margin:0;padding:0;background:#0d1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
   <!-- dark patterned outer wrapper — background attribute works in more clients than CSS -->
-  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0d1117"
-    style="background-color:#0d1117;background-image:url('${bgTileUrl}');background-repeat:repeat;min-height:100vh;">
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#f5f0e8"
+    style="background-color:#f5f0e8;background-image:url('${bgTileUrl}');background-repeat:repeat;min-height:100vh;">
     <tr>
       <td align="center" style="padding:40px 16px;"
         background="${bgTileUrl}">
@@ -99,9 +99,9 @@ export function buildEmail(opts: {
         </table>
 
         <!-- below-card note -->
-        <p style="color:#4b5563;font-size:12px;margin-top:20px;">
+        <p style="color:#7c6f5a;font-size:12px;margin-top:20px;">
           © ${new Date().getFullYear()} TOEFL Academic &nbsp;·&nbsp;
-          <a href="mailto:support@toeflacademic.com" style="color:#6b7280;">support@toeflacademic.com</a>
+          <a href="mailto:support@toeflacademic.com" style="color:#7c6f5a;">support@toeflacademic.com</a>
         </p>
 
       </td>

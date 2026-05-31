@@ -75,7 +75,7 @@ serve(async (req) => {
           <td style="padding:10px 0;color:#d97706;font-weight:600;">Awaiting payment</td>
         </tr>
       </table>
-      <p style="color:#374151;font-size:15px;line-height:1.6;">To confirm your slot, complete payment via M-Pesa or card from your dashboard.</p>
+      <p style="color:#374151;font-size:15px;line-height:1.6;">To confirm your slot, complete payment from your dashboard. You'll find all available payment options there.</p>
     `;
 
     await sendEmail({
