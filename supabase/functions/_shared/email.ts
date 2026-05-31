@@ -48,14 +48,9 @@ export function buildEmail(opts: {
   const fl2Label = opts.footerLink2Label ?? "Help Center";
   const fl2Url = opts.footerLink2Url ?? `${appUrl}/support`;
 
-  // Tiled SVG icon pattern — mortarboards and certificates at low opacity
-  const patternSvg = `
-    <svg xmlns='http://www.w3.org/2000/svg' width='80' height='80'>
-      <text x='8' y='40' font-size='28' opacity='0.10' fill='%23ffffff'>🎓</text>
-      <text x='44' y='72' font-size='22' opacity='0.08' fill='%23ffffff'>📜</text>
-    </svg>
-  `.replace(/\s+/g, " ").trim();
-  const encodedPattern = encodeURIComponent(patternSvg);
+  // Real hosted SVG tile — works in Apple Mail, Outlook Mac, Thunderbird.
+  // Gmail web strips background-image but falls back gracefully to solid #0d1117.
+  const bgTileUrl = `${appUrl}/email-bg.svg`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -66,18 +61,20 @@ export function buildEmail(opts: {
 </head>
 <body style="margin:0;padding:0;background:#0d1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
 
-  <!-- dark patterned outer wrapper -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d1117;background-image:url('data:image/svg+xml,${encodedPattern}');min-height:100vh;">
+  <!-- dark patterned outer wrapper — background attribute works in more clients than CSS -->
+  <table width="100%" cellpadding="0" cellspacing="0" bgcolor="#0d1117"
+    style="background-color:#0d1117;background-image:url('${bgTileUrl}');background-repeat:repeat;min-height:100vh;">
     <tr>
-      <td align="center" style="padding:40px 16px;">
+      <td align="center" style="padding:40px 16px;"
+        background="${bgTileUrl}">
 
         <!-- white card -->
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.4);">
 
-          <!-- logo row -->
+          <!-- logo -->
           <tr>
-            <td align="center" style="padding:32px 40px 24px;border-bottom:1px solid #f0f0f0;">
-              <img src="${appUrl}/logo.png" alt="TOEFL Academic" width="160" style="display:block;height:auto;" />
+            <td align="center" style="padding:32px 40px 24px;border-bottom:1px solid #f0f0f0;background:#0C1A35;border-radius:8px 8px 0 0;">
+              <img src="${appUrl}/logo.png" alt="TOEFL Academic" width="80" height="80" style="display:block;border-radius:50%;" />
             </td>
           </tr>
 
