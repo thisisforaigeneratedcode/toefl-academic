@@ -38,11 +38,10 @@ serve(async (req) => {
       .from("bookings")
       .select("*")
       .eq("id", booking_id)
-      .eq("user_id", user.id)
       .maybeSingle();
     if (!booking) return new Response(JSON.stringify({ error: "Booking not found" }), { status: 404, headers: corsHeaders });
 
-    const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", user.id).single();
+    const { data: profile } = await admin.from("profiles").select("full_name, email").eq("id", booking.user_id).single();
     const name = profile?.full_name?.split(" ")[0] ?? "there";
     const email = profile?.email ?? user.email;
     if (!email) return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
@@ -53,6 +52,7 @@ serve(async (req) => {
       weekday: "long", year: "numeric", month: "long", day: "numeric",
     });
     const amountKes = booking.amount_kes ? `KES ${booking.amount_kes.toLocaleString()}` : "";
+    const isPaid = booking.payment_status === "completed";
 
     const body = `
       <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
@@ -72,19 +72,22 @@ serve(async (req) => {
         </tr>` : ""}
         <tr>
           <td style="padding:10px 0;color:#6b7280;">Status</td>
-          <td style="padding:10px 0;color:#d97706;font-weight:600;">Awaiting payment</td>
+          <td style="padding:10px 0;font-weight:600;${isPaid ? "color:#16a34a;" : "color:#d97706;"}">${isPaid ? "Confirmed" : "Awaiting payment"}</td>
         </tr>
       </table>
-      <p style="color:#374151;font-size:15px;line-height:1.6;">To confirm your slot, complete payment from your dashboard. You'll find all available payment options there.</p>
+      <p style="color:#374151;font-size:15px;line-height:1.6;">${isPaid
+        ? "Your slot is confirmed — head to your dashboard when you're ready to start the exam."
+        : "To confirm your slot, complete payment from your dashboard. You'll find all available payment options there."
+      }</p>
     `;
 
     await sendEmail({
       to: email,
-      subject: `Booking confirmed — ${levelName}`,
+      subject: `Exam booked — ${levelName}`,
       html: buildEmail({
         heading: "Your exam is booked!",
         body,
-        ctaLabel: "Pay Now",
+        ctaLabel: isPaid ? "Go to Dashboard" : "Pay Now",
         ctaUrl: `${appUrl}/dashboard`,
         footerLink1Label: "My Dashboard",
         footerLink1Url: `${appUrl}/dashboard`,

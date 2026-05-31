@@ -56,6 +56,7 @@ export default function AdminManualBooking({ users, onChange }: { users: any[]; 
         if (approveErr) throw approveErr;
         toast.success(`Booking created and ${band} certificate issued`);
       } else {
+        supabase.functions.invoke("send-booking-confirmation", { body: { booking_id: booking.id } }).catch(() => {});
         toast.success("Booking created — client can now take the exam from their dashboard");
       }
       setUserId("");
