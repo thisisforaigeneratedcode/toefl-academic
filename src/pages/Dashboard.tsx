@@ -225,7 +225,8 @@ export default function Dashboard() {
       }).select().single();
       if (error) throw error;
       setBookings([data, ...bookings]);
-      toast.success(`Booked: ${level} on ${format(new Date(data.scheduled_at), "PPp")} — pay via M-Pesa to confirm.`);
+      toast.success(`Booked: ${lvl?.name} (${level}) on ${format(new Date(data.scheduled_at), "PPp")} — complete payment to confirm.`);
+      supabase.functions.invoke("send-booking-confirmation", { body: { booking_id: data.id } }).catch(() => {});
     } catch (e: any) { toast.error(e.message); } finally { setBusy(false); }
   };
 
@@ -269,7 +270,7 @@ export default function Dashboard() {
         {/* Book a test */}
         <Card className="p-6">
           <h2 className="font-serif text-2xl font-bold text-primary mb-1">Book a new test</h2>
-          <p className="text-sm text-muted-foreground mb-4">Pick your level and a time. Pay via M-Pesa after booking to confirm. Prices shown in <strong>{currency}</strong>.</p>
+          <p className="text-sm text-muted-foreground mb-4">Pick your level and a time. Complete payment after booking to confirm your slot. Prices shown in <strong>{currency}</strong>.</p>
           <div className="grid md:grid-cols-3 gap-4 items-end">
             <div>
               <Label>Level</Label>

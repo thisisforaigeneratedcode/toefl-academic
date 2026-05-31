@@ -53,6 +53,8 @@ export default function Auth() {
         setStoredCountry(country);
         const cur = COUNTRY_CURRENCY[country] ?? "USD";
         toast.success(`Account created! Prices will show in ${cur}.`);
+        // fire-and-forget welcome email
+        supabase.functions.invoke("send-welcome", { body: { email, full_name: fullName } }).catch(() => {});
       } else {
         const parsed = signInSchema.safeParse({ email, password });
         if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
