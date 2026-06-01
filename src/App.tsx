@@ -17,7 +17,9 @@ import NotFound from "./pages/NotFound.tsx";
 import SupportChat from "./components/SupportChat";
 import { BlogIndex, BlogPost } from "./pages/Blog";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { refetchOnWindowFocus: false } },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

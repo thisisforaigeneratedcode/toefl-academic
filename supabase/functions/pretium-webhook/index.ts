@@ -163,7 +163,7 @@ serve(async (req) => {
       const paid = booking.amount_kes ? `KES ${booking.amount_kes.toLocaleString()}` : "";
       const payBody = `
         <p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${name},</p>
-        <p style="color:#374151;font-size:15px;line-height:1.6;">Your payment${paid ? ` of <strong>${paid}</strong>` : ""} has been received and your <strong>${levelName}</strong> exam slot is now confirmed.</p>
+        <p style="color:#374151;font-size:15px;line-height:1.6;">Your payment has been received and your <strong>${levelName}</strong> exam slot is now confirmed.</p>
         <p style="color:#374151;font-size:15px;line-height:1.6;">Head to your dashboard to start your exam whenever you're ready.</p>
       `;
       await sendEmail({
@@ -180,6 +180,48 @@ serve(async (req) => {
           footerLink2Url: `${appUrl}/support`,
         }),
       });
+
+      const adminEmail = Deno.env.get("ADMIN_EMAIL");
+      if (adminEmail) {
+        await sendEmail({
+          to: adminEmail,
+          subject: `Payment received — ${levelName}${paid ? ` (${paid})` : ""}`,
+          html: buildEmail({
+            heading: "New payment received",
+            body: `
+              <p style="color:#374151;font-size:15px;line-height:1.6;">A mobile payment has been completed.</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+                <tr style="border-bottom:1px solid #f0f0f0;">
+                  <td style="padding:10px 0;color:#6b7280;width:40%;">Candidate</td>
+                  <td style="padding:10px 0;color:#111827;font-weight:600;">${profile?.full_name ?? "—"}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #f0f0f0;">
+                  <td style="padding:10px 0;color:#6b7280;">Level</td>
+                  <td style="padding:10px 0;color:#111827;">${levelName}</td>
+                </tr>
+                ${paid ? `<tr style="border-bottom:1px solid #f0f0f0;">
+                  <td style="padding:10px 0;color:#6b7280;">Amount</td>
+                  <td style="padding:10px 0;color:#111827;font-weight:600;">${paid}</td>
+                </tr>` : ""}
+                <tr style="border-bottom:1px solid #f0f0f0;">
+                  <td style="padding:10px 0;color:#6b7280;">Method</td>
+                  <td style="padding:10px 0;color:#111827;">Mobile payment</td>
+                </tr>
+                ${receipt_number ? `<tr>
+                  <td style="padding:10px 0;color:#6b7280;">Receipt</td>
+                  <td style="padding:10px 0;color:#111827;font-family:monospace;">${receipt_number}</td>
+                </tr>` : ""}
+              </table>
+            `,
+            ctaLabel: "View Admin Panel",
+            ctaUrl: `${appUrl}/admin`,
+            footerLink1Label: "Admin Panel",
+            footerLink1Url: `${appUrl}/admin`,
+            footerLink2Label: "All Bookings",
+            footerLink2Url: `${appUrl}/admin`,
+          }),
+        });
+      }
     }
 
   } else if (status === "FAILED") {

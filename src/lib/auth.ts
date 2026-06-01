@@ -19,7 +19,9 @@ export function useAuth() {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, sess) => {
+      // TOKEN_REFRESHED fires silently on tab focus — don't trigger a loading flash
+      if (event === "TOKEN_REFRESHED") return;
       setLoading(true);
       setSession(sess);
       setUser(sess?.user ?? null);
