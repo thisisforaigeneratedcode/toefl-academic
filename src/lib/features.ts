@@ -1,3 +1,4 @@
 export const FEATURES = {
-  pretium: false, // set to false to disable M-Pesa payments
+  pretium: true,  // M-Pesa (Pretium) payments
+  paystack: false, // card (Paystack) payments
 } as const;

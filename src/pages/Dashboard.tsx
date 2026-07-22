@@ -457,8 +457,8 @@ export default function Dashboard() {
                     <div className="text-xs text-muted-foreground mt-0.5">{format(new Date(payingBooking.scheduled_at), "PPp")}</div>
                   </div>
 
-                  {/* Payment method selector — only shown when Pretium is enabled */}
-                  {FEATURES.pretium && (
+                  {/* Payment method selector — only shown when both methods are enabled */}
+                  {FEATURES.pretium && FEATURES.paystack && (
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -501,7 +501,7 @@ export default function Dashboard() {
                         {payPhase === "failed" ? "Try again" : `Pay KES ${amount_kes.toLocaleString()} via M-Pesa`}
                       </Button>
                     </>
-                  ) : (
+                  ) : FEATURES.paystack ? (
                     <>
                       <p className="text-xs text-muted-foreground">You'll be taken to a secure page to complete your card payment.</p>
                       <Button variant="gold" className="w-full" onClick={payWithCard} disabled={cardBusy}>
@@ -509,7 +509,7 @@ export default function Dashboard() {
                         {cardBusy ? "Processing…" : `Pay KES ${amount_kes.toLocaleString()} with Card`}
                       </Button>
                     </>
-                  )}
+                  ) : null}
                 </div>
               </>
             );
