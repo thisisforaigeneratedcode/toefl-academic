@@ -129,8 +129,10 @@ serve(async (req) => {
     } else {
       await db.from("apicosts").insert({
         type: "settlement",
+        payment_id: withdrawal_reference,
         transaction_amount_kes: requestedAmount,
         pretium_fee_kes: pretium_fee,
+        combined_fee_kes: pretium_fee,
         api_earnings_kes: 0,
         [earningsCol]: requestedAmount,
         [withdrawnCol]: true,

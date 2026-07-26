@@ -53,14 +53,21 @@ export default function ApiEarnings() {
   const mpesaDeposits   = depositRows.filter(r => !String(r.payment_id ?? "").startsWith("TA-"));
   const cardDeposits    = depositRows.filter(r => String(r.payment_id ?? "").startsWith("TA-"));
 
-  const mpesaEarned   = mpesaDeposits.reduce((s, r) => s + (r.api_earnings_kes ?? 0), 0);
-  const cardEarned    = cardDeposits.reduce((s, r) => s + (r.api_earnings_kes ?? 0), 0);
+  // Owner's cut per row (owner_earnings_kes, falling back to the legacy api_earnings_kes)
+  const ownerCut = (r: any) => r.owner_earnings_kes ?? r.api_earnings_kes ?? 0;
+
+  const mpesaEarned   = mpesaDeposits.reduce((s, r) => s + ownerCut(r), 0);
+  const cardEarned    = cardDeposits.reduce((s, r) => s + ownerCut(r), 0);
   const totalEarned   = mpesaEarned + cardEarned;
 
-  const totalSettled  = depositRows.filter(r => r.owner_withdrawn).reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0)
+  // Already-settled owner cut: withdrawn deposit rows + any settlement rows
+  const mpesaSettled  = mpesaDeposits.filter(r => r.owner_withdrawn).reduce((s, r) => s + ownerCut(r), 0)
+    + settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
+  const totalSettled  = depositRows.filter(r => r.owner_withdrawn).reduce((s, r) => s + ownerCut(r), 0)
     + settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
 
-  const mpesaPending  = 0; // managed manually via admin wallet
+  // Real unsettled M-Pesa owner earnings (was previously hardcoded to 0)
+  const mpesaPending  = Math.max(0, mpesaEarned - mpesaSettled);
   const cardPending   = cardEarned; // never auto-settled — always manual
   const pending       = mpesaPending;
   const isReady       = mpesaPending >= AUTO_SETTLE_THRESHOLD;
