@@ -1,10 +1,10 @@
 export const KES_RATE = 129;
 
 export const LEVELS = [
-  { code: "A2", name: "Elementary", description: "Routine tasks and familiar topics.", price: 85, duration: "10 min" },
+  { code: "A2", name: "Elementary", description: "Routine tasks and familiar topics.", price: 348.837, duration: "10 min" },   // KES 45,000
   { code: "B1", name: "Intermediate", description: "Travel, work, and clear standard input.", price: 139.534, duration: "10 min" },
-  { code: "B2", name: "Upper-Intermediate", description: "Complex texts and abstract topics.", price: 119, duration: "10 min" },
-  { code: "C1", name: "Advanced", description: "Fluent and spontaneous expression.", price: 139, duration: "10 min" },
+  { code: "B2", name: "Upper-Intermediate", description: "Complex texts and abstract topics.", price: 503.876, duration: "10 min" },  // KES 65,000
+  { code: "C1", name: "Advanced", description: "Fluent and spontaneous expression.", price: 271.318, duration: "10 min" },  // KES 35,000
   { code: "C2", name: "Proficient", description: "Mastery — near-native command.", price: 428.682, duration: "10 min" },
 ] as const;
 

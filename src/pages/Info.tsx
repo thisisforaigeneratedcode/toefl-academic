@@ -4,6 +4,8 @@ import { LEVELS } from "@/lib/levels";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/hooks/useCurrency";
+import { WhatsAppIcon } from "@/components/WhatsAppIcon";
+import { WHATSAPP_LINK, WHATSAPP_DISPLAY, SUPPORT_EMAIL } from "@/lib/support";
 
 export function About() {
   return <Layout><div className="container mx-auto py-16 max-w-3xl"><h1 className="font-serif text-5xl font-bold text-primary mb-4">About TOEFL Academic</h1><p className="text-muted-foreground text-lg mb-4">TOEFL Academic is a globally accessible online testing programme aligned with the Common European Framework of Reference for Languages (CEFR). Our mission is to make trusted, professional English certification available to anyone, anywhere — without the cost and friction of traditional test centres.</p><p className="text-muted-foreground mb-4">Founded by linguists and assessment specialists, TOEFL Academic delivers six progressive levels (A1–C2), each rigorously calibrated to international language standards. Certificates are issued instantly upon completion, signed by our Director of Examinations, and can be verified publicly by employers, universities, and immigration authorities.</p><h2 className="font-serif text-2xl font-bold text-primary mt-8 mb-3">Our values</h2><ul className="list-disc pl-6 text-muted-foreground space-y-2"><li><b>Accessibility</b> — testing from any device, anywhere in the world.</li><li><b>Integrity</b> — every certificate is uniquely numbered and publicly verifiable.</li><li><b>Standards</b> — strict CEFR alignment ensures comparability with major frameworks.</li><li><b>Speed</b> — instant scoring and certificate delivery, no waiting weeks.</li></ul></div></Layout>;
@@ -25,7 +27,12 @@ export function Faq() {
 }
 
 export function Contact() {
-  return <Layout><div className="container mx-auto py-16 max-w-2xl"><h1 className="font-serif text-5xl font-bold text-primary mb-4">Contact Us</h1><p className="text-muted-foreground mb-6">Have a question, partnership inquiry, or need help with a certificate? Get in touch.</p><Card className="p-6 space-y-3"><div><div className="text-xs uppercase text-muted-foreground">Email</div><div className="font-semibold">support@toeflacademic.com</div></div><div><div className="text-xs uppercase text-muted-foreground">Organisations</div><div className="font-semibold">partners@toeflacademic.com</div></div><div><div className="text-xs uppercase text-muted-foreground">Hours</div><div className="font-semibold">Mon–Fri, 09:00–18:00 GMT</div></div></Card></div></Layout>;
+  return <Layout><div className="container mx-auto py-16 max-w-2xl"><h1 className="font-serif text-5xl font-bold text-primary mb-4">Contact Us</h1><p className="text-muted-foreground mb-6">Have a question, partnership inquiry, or need help with a certificate? Get in touch.</p>
+    <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 rounded-xl border border-[#25D366]/40 bg-[#25D366]/10 p-4 mb-4 hover:bg-[#25D366]/15 transition-colors">
+      <span className="flex items-center justify-center w-11 h-11 rounded-full bg-[#25D366] text-white shrink-0"><WhatsAppIcon className="w-6 h-6" /></span>
+      <span><span className="block text-xs uppercase tracking-wide text-muted-foreground">Chat on WhatsApp — fastest reply</span><span className="block font-semibold text-primary">{WHATSAPP_DISPLAY}</span></span>
+    </a>
+    <Card className="p-6 space-y-3"><div><div className="text-xs uppercase text-muted-foreground">Email</div><div className="font-semibold">{SUPPORT_EMAIL}</div></div><div><div className="text-xs uppercase text-muted-foreground">Organisations</div><div className="font-semibold">partners@toeflacademic.com</div></div><div><div className="text-xs uppercase text-muted-foreground">Hours</div><div className="font-semibold">Mon–Fri, 09:00–18:00 GMT</div></div></Card></div></Layout>;
 }
 
 export function Privacy() {

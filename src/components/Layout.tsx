@@ -5,6 +5,8 @@ import logo from "@/assets/logo.svg";
 import { LogOut, ShieldCheck, LayoutDashboard, Menu, X } from "lucide-react";
 import { useState } from "react";
 import CurrencyPicker from "@/components/CurrencyPicker";
+import { WhatsAppIcon } from "@/components/WhatsAppIcon";
+import { WHATSAPP_LINK } from "@/lib/support";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, isAdmin } = useAuth();
@@ -127,6 +129,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <ul className="space-y-2 text-sm text-[#EEE9DC]/70">
               <li><Link to="/about" className="hover:text-gold transition-smooth">About us</Link></li>
               <li><Link to="/contact" className="hover:text-gold transition-smooth">Contact</Link></li>
+              <li>
+                <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[#25D366] hover:text-[#4ce07f] transition-smooth font-medium">
+                  <WhatsAppIcon className="w-4 h-4" /> WhatsApp support
+                </a>
+              </li>
               <li><Link to="/faq" className="hover:text-gold transition-smooth">FAQ</Link></li>
               <li><Link to="/blog" className="hover:text-gold transition-smooth">Blog</Link></li>
               <li><Link to="/privacy" className="hover:text-gold transition-smooth">Privacy policy</Link></li>

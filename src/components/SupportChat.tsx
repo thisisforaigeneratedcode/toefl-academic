@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { LifeBuoy, X, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import { WhatsAppIcon } from "@/components/WhatsAppIcon";
+import { WHATSAPP_LINK, WHATSAPP_DISPLAY } from "@/lib/support";
 
 type Msg = {
   id: string;
@@ -89,6 +91,20 @@ export default function SupportChat() {
 
   // Always show support button for everyone
 
+  /* WhatsApp support sub-icon — a green FAB shown whenever the chat panel is closed */
+  const WhatsAppFab = () => (
+    <a
+      href={WHATSAPP_LINK}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Message support on WhatsApp (${WHATSAPP_DISPLAY})`}
+      title={`WhatsApp support · ${WHATSAPP_DISPLAY}`}
+      className="fixed bottom-40 right-4 z-50 flex items-center justify-center w-12 h-12 rounded-full bg-[#25D366] text-white shadow-elegant hover:bg-[#1ebe5b] transition-colors"
+    >
+      <WhatsAppIcon className="w-7 h-7" />
+    </a>
+  );
+
   /* Side-tab trigger — not a floating circle */
   const Trigger = ({ onClick, label }: { onClick: () => void; label: string }) => (
     <button
@@ -108,11 +124,17 @@ export default function SupportChat() {
   );
 
   if (!user) {
-    return <Trigger onClick={() => navigate("/auth")} label="Sign in for support" />;
+    return (
+      <>
+        <WhatsAppFab />
+        <Trigger onClick={() => navigate("/auth")} label="Sign in for support" />
+      </>
+    );
   }
 
   return (
     <>
+      {!open && <WhatsAppFab />}
       {!open && <Trigger onClick={() => setOpen(true)} label="Open support" />}
 
       {open && (
