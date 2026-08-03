@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { ShieldCheck, Wallet, RefreshCw, Loader2, Smartphone, Info, MessageCircle, UserPlus, Award } from "lucide-react";
 import AdminChat from "@/components/AdminChat";
 import AdminManualBooking from "@/components/AdminManualBooking";
+import AdminCollectPayment from "@/components/AdminCollectPayment";
 import { pretiumDisburseFee } from "@/lib/pretium";
 
 function estimateReceived(amount: number): number {
@@ -233,6 +234,7 @@ export default function Admin() {
             <TabsTrigger value="questions">Question Bank</TabsTrigger>
             <TabsTrigger value="chat"><MessageCircle className="w-3 h-3 mr-1" />Chat</TabsTrigger>
             <TabsTrigger value="issue"><Award className="w-3 h-3 mr-1" />Issue cert</TabsTrigger>
+            <TabsTrigger value="collect"><Smartphone className="w-3 h-3 mr-1" />Collect payment</TabsTrigger>
             <TabsTrigger value="wallet"><Wallet className="w-3 h-3 mr-1" />Wallet</TabsTrigger>
           </TabsList>
 
@@ -378,6 +380,10 @@ export default function Admin() {
                 Issue certificate
               </Button>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="collect">
+            <AdminCollectPayment />
           </TabsContent>
 
           <TabsContent value="wallet">

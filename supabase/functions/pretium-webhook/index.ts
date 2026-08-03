@@ -81,6 +81,65 @@ async function settleIfReady(db: ReturnType<typeof createClient>, target: "owner
   }
 }
 
+// Admin-initiated "Collect payment" prompt (no booking): same fee split as
+// a booking deposit, credited to the same apicosts ledger with booking_id
+// null, so it counts toward the wallet balance exactly like a real exam
+// payment does.
+async function handleDirectPayment(
+  db: ReturnType<typeof createClient>,
+  transaction_code: string,
+  status: string | undefined,
+  receipt_number: string | undefined,
+) {
+  const { data: direct } = await db
+    .from("direct_payments")
+    .select("id, status, amount_kes")
+    .eq("pretium_reference", transaction_code)
+    .maybeSingle();
+
+  if (!direct) return json({ ok: true });
+  if (direct.status !== "pending") return json({ ok: true });
+
+  if (status === "FAILED") {
+    await db.from("direct_payments").update({
+      status: "failed",
+      completed_at: new Date().toISOString(),
+    }).eq("id", direct.id);
+    return json({ ok: true });
+  }
+
+  if (status === "COMPLETE") {
+    const amount_kes = direct.amount_kes ?? 0;
+    const pretium_fee_kes = Math.round(amount_kes * 0.02);
+    const net_kes = amount_kes - pretium_fee_kes;
+    const api_earnings_kes = Math.round(net_kes * 0.08);
+
+    const { error: ledgerErr } = await db.from("apicosts").insert({
+      type: "deposit",
+      booking_id: null,
+      payment_id: transaction_code,
+      transaction_amount_kes: amount_kes,
+      pretium_fee_kes,
+      api_earnings_kes,
+      owner_earnings_kes: api_earnings_kes,
+      partner_earnings_kes: 0,
+      combined_fee_kes: pretium_fee_kes + api_earnings_kes,
+    });
+    if (ledgerErr) {
+      console.error("apicosts insert failed (direct payment)", ledgerErr.message);
+      return json({ error: "ledger write failed" }, 500);
+    }
+
+    await db.from("direct_payments").update({
+      status: "completed",
+      receipt_number: receipt_number ?? null,
+      completed_at: new Date().toISOString(),
+    }).eq("id", direct.id);
+  }
+
+  return json({ ok: true });
+}
+
 serve(async (req) => {
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
@@ -117,7 +176,7 @@ serve(async (req) => {
     .eq("payment_id", transaction_code)
     .maybeSingle();
 
-  if (!booking) return json({ ok: true });
+  if (!booking) return handleDirectPayment(db, transaction_code, status, receipt_number);
   if (booking.payment_status !== "pending") return json({ ok: true });
 
   if (status === "COMPLETE") {
