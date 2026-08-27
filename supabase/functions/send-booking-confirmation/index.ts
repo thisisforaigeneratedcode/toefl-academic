@@ -13,6 +13,7 @@ const LEVEL_NAMES: Record<string, string> = {
   B2: "Upper-Intermediate (B2)",
   C1: "Advanced (C1)",
   C2: "Proficient (C2)",
+  WV: "Work & Visa English",
 };
 
 serve(async (req) => {

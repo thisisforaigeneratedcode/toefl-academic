@@ -36,6 +36,13 @@ const LISTENING_PROMPTS: Record<string, string[]> = {
   C2: [
     "Notwithstanding the considerable progress that has been made in recent years, a number of structural inequalities continue to undermine the fundamental promise of equal opportunity for all citizens.",
   ],
+  // Draft content — professional/workplace register, aimed at the Work &
+  // Visa English tier. Review before real candidates rely on it.
+  WV: [
+    "Please note that the office will be closed for the public holiday on Monday. Normal working hours will resume on Tuesday morning at eight thirty.",
+    "As part of your role, you will be expected to submit a short progress report every Friday summarising the tasks completed during the week.",
+    "The visa application requires two forms of identification, a recent passport photograph, and proof of employment from your sponsoring company.",
+  ],
 };
 
 const READING_PASSAGES: Record<string, string[]> = {
@@ -56,6 +63,10 @@ const READING_PASSAGES: Record<string, string[]> = {
   ],
   C2: [
     "The relentless pace of technological change has produced a peculiar paradox: never before have human beings had access to so much information, and yet seldom have we felt so overwhelmed by it. To navigate this landscape with clarity, one must cultivate not merely the ability to gather facts, but the deeper capacity to weigh, contextualise and ultimately disregard much of what one encounters.",
+  ],
+  // Draft content — see note above.
+  WV: [
+    "Moving to a new country for work can be both exciting and challenging. Before you arrive, it is important to understand your employment contract, including your working hours, salary, and any probation period. Many employers also require new staff to complete an induction programme in their first week, covering workplace policies, health and safety procedures, and an introduction to the team. Being well prepared for these first steps can make the transition to a new job and a new country much smoother.",
   ],
 };
 

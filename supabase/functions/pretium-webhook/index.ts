@@ -5,7 +5,7 @@ import { sendEmail, buildEmail } from "../_shared/email.ts";
 
 const LEVEL_NAMES: Record<string, string> = {
   A2: "Elementary (A2)", B1: "Intermediate (B1)", B2: "Upper-Intermediate (B2)",
-  C1: "Advanced (C1)", C2: "Proficient (C2)",
+  C1: "Advanced (C1)", C2: "Proficient (C2)", WV: "Work & Visa English",
 };
 
 const WEBHOOK_SECRET = Deno.env.get("PRETIUM_WEBHOOK_SECRET")!;

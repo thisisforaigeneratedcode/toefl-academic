@@ -6,6 +6,7 @@ export const LEVELS = [
   { code: "B2", name: "Upper-Intermediate", description: "Complex texts and abstract topics.", price: 503.876, duration: "10 min" },  // KES 65,000
   { code: "C1", name: "Advanced", description: "Fluent and spontaneous expression.", price: 271.318, duration: "10 min" },  // KES 35,000
   { code: "C2", name: "Proficient", description: "Mastery — near-native command.", price: 428.682, duration: "10 min" },
+  { code: "WV", name: "Work & Visa English", description: "Professional-level certification recognised internationally — accepted for work permit and visa applications.", price: 545.736, duration: "10 min" },  // KES 70,400
 ] as const;
 
 export type LevelCode = typeof LEVELS[number]["code"];
@@ -24,4 +25,5 @@ export const WRITING_PROMPTS: Record<string, string> = {
   B2: "Write 150–200 words on: 'Some people think technology has made us lonelier.' Discuss with examples.",
   C1: "Write 200–250 words discussing whether governments should prioritise economic growth or environmental protection.",
   C2: "Write 250–300 words: 'In an era of misinformation, traditional journalism remains the most reliable source of truth.' Critically evaluate.",
+  WV: "Write 150–200 words describing a work-related responsibility or challenge you have handled. Include specific details about your role, the actions you took, and the outcome.",
 };
