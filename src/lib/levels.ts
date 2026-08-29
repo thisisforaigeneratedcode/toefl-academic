@@ -6,7 +6,7 @@ export const LEVELS = [
   { code: "B2", name: "Upper-Intermediate", description: "Complex texts and abstract topics.", price: 503.876, duration: "10 min" },  // KES 65,000
   { code: "C1", name: "Advanced", description: "Fluent and spontaneous expression.", price: 271.318, duration: "10 min" },  // KES 35,000
   { code: "C2", name: "Proficient", description: "Mastery — near-native command.", price: 428.682, duration: "10 min" },
-  { code: "WV", name: "Work & Visa English", description: "Professional-level certification recognised internationally — accepted for work permit and visa applications.", price: 545.736, duration: "10 min" },  // KES 70,400
+  { code: "WV", name: "Work & Visa English", description: "Professional-level certification recognised internationally — accepted for work permit and visa applications.", price: 204.651, duration: "10 min" },  // KES 26,400
 ] as const;
 
 export type LevelCode = typeof LEVELS[number]["code"];
