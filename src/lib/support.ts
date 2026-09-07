@@ -1,8 +1,8 @@
 // Support contact channels — used across the footer, contact page, and support widget.
 export const SUPPORT_EMAIL = "support@toeflacademic.com";
 
-// WhatsApp support line (+44 7401404215)
-export const WHATSAPP_DISPLAY = "+44 7401 404215";
+// WhatsApp support line (+1 7828315595)
+export const WHATSAPP_DISPLAY = "+1 782 831 5595";
 export const WHATSAPP_LINK =
-  "https://wa.me/447401404215?text=" +
+  "https://wa.me/17828315595?text=" +
   encodeURIComponent("Hi TOEFL Academic support, I have a question about ");

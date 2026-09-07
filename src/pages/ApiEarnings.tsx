@@ -4,7 +4,7 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Loader2, Smartphone } from "lucide-react";
+import { Loader2, Smartphone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { pretiumDisburseFee } from "@/lib/pretium";
 
@@ -18,6 +18,60 @@ export default function ApiEarnings() {
   const [autoSettle, setAutoSettle] = useState(false);
   const [togglingAuto, setTogglingAuto] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
+
+  // All bookings + Collect-payment prompts — full visibility, delete
+  // restricted (server-side, not just here) to failed/cancelled clutter.
+  const [records, setRecords] = useState<{ bookings: any[]; direct_payments: any[] }>({ bookings: [], direct_payments: [] });
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [recordsTab, setRecordsTab] = useState<"bookings" | "collect">("bookings");
+
+  const callOwnerTransactions = async (body: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data, error } = await supabase.functions.invoke("owner-transactions", {
+      body,
+      headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+    });
+    if (error || data?.error) throw new Error(data?.error ?? error?.message);
+    return data;
+  };
+
+  const loadRecords = async () => {
+    setRecordsLoading(true);
+    try {
+      const data = await callOwnerTransactions({ action: "list" });
+      setRecords({ bookings: data.bookings ?? [], direct_payments: data.direct_payments ?? [] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to load bookings");
+    }
+    setRecordsLoading(false);
+  };
+
+  const deleteBooking = async (id: string) => {
+    if (!confirm("Delete this failed/cancelled booking permanently? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      await callOwnerTransactions({ action: "delete_booking", booking_id: id });
+      toast.success("Booking deleted");
+      setRecords((r) => ({ ...r, bookings: r.bookings.filter((b) => b.id !== id) }));
+    } catch (e: any) {
+      toast.error(e.message ?? "Delete failed");
+    }
+    setDeletingId(null);
+  };
+
+  const deleteDirectPayment = async (id: string) => {
+    if (!confirm("Delete this failed payment prompt permanently? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      await callOwnerTransactions({ action: "delete_direct_payment", id });
+      toast.success("Prompt deleted");
+      setRecords((r) => ({ ...r, direct_payments: r.direct_payments.filter((d) => d.id !== id) }));
+    } catch (e: any) {
+      toast.error(e.message ?? "Delete failed");
+    }
+    setDeletingId(null);
+  };
 
   const loadData = async () => {
     if (!user) return;
@@ -34,6 +88,7 @@ export default function ApiEarnings() {
       ]);
       setApicosts(rows || []);
       setAutoSettle(flag?.value === "true");
+      loadRecords();
     }
   };
 
@@ -230,6 +285,108 @@ export default function ApiEarnings() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* All bookings + Collect-payment prompts — full visibility for the
+            owner; delete is only ever offered for failed/cancelled rows,
+            and the edge function re-checks that server-side regardless of
+            what's clicked here. apicosts (the ledger above) is never
+            touched by this section. */}
+        <div className="mt-12">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Records</p>
+            <div className="flex gap-1 bg-muted rounded-md p-0.5">
+              {(["bookings", "collect"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setRecordsTab(t)}
+                  className={`text-xs px-3 py-1 rounded transition-colors ${
+                    recordsTab === t ? "bg-background text-primary shadow-sm font-medium" : "text-muted-foreground hover:text-primary"
+                  }`}
+                >
+                  {t === "bookings" ? "Bookings" : "Collect payment prompts"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {recordsLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : recordsTab === "bookings" ? (
+            records.bookings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No bookings yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {records.bookings.map((b) => {
+                  const deletable = b.payment_status === "failed" || b.status === "cancelled";
+                  return (
+                    <div key={b.id} className="py-3 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-primary flex items-center gap-2">
+                          {b.level}
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            b.payment_status === "completed" ? "text-green-700 border-green-300"
+                              : b.payment_status === "failed" ? "text-red-700 border-red-300"
+                              : "text-muted-foreground border-border"
+                          }`}>
+                            {b.payment_status}
+                          </span>
+                          {b.status === "cancelled" && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border text-red-700 border-red-300">cancelled</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          KES {(b.amount_kes ?? 0).toLocaleString()} · {format(new Date(b.created_at), "d MMM yyyy")}
+                        </p>
+                      </div>
+                      {deletable && (
+                        <button
+                          onClick={() => deleteBooking(b.id)}
+                          disabled={deletingId === b.id}
+                          className="shrink-0 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1 rounded hover:bg-red-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : records.direct_payments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No prompt payments yet.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {records.direct_payments.map((p) => (
+                <div key={p.id} className="py-3 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-primary flex items-center gap-2">
+                      {p.phone}
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                        p.status === "completed" ? "text-green-700 border-green-300"
+                          : p.status === "failed" ? "text-red-700 border-red-300"
+                          : "text-muted-foreground border-border"
+                      }`}>
+                        {p.status}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      KES {(p.amount_kes ?? 0).toLocaleString()} · {p.note || "—"} · {format(new Date(p.created_at), "d MMM yyyy")}
+                    </p>
+                  </div>
+                  {p.status === "failed" && (
+                    <button
+                      onClick={() => deleteDirectPayment(p.id)}
+                      disabled={deletingId === p.id}
+                      className="shrink-0 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1 rounded hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

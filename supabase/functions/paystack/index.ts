@@ -56,19 +56,18 @@ serve(async (req) => {
             .maybeSingle();
 
           if (booking && booking.payment_status !== "completed") {
-            await db.from("bookings").update({
-              payment_status: "completed",
-              status: "confirmed",
-              mpesa_receipt: reference,
-              paid_at: new Date().toISOString(),
-            }).eq("id", bookingId);
-
             // Track API earnings — same split as Pretium payments
             const paystack_fee_kes = Math.round(amount_kes * 0.015); // ~1.5%
             const net_kes = amount_kes - paystack_fee_kes;
             const api_earnings_kes = Math.round(net_kes * 0.08);
 
-            await db.from("apicosts").insert({
+            // Ledger row goes in FIRST and is verified before the booking is
+            // ever marked paid — "completed" and "has a ledger row" must
+            // never disagree. Previously this ran unchecked after the
+            // booking update: a failed insert here was invisible, and since
+            // the /verify fallback also skips once payment_status is
+            // already "completed", the money would never be recovered.
+            const { error: ledgerErr } = await db.from("apicosts").insert({
               type: "deposit",
               booking_id: bookingId,
               payment_id: reference,
@@ -79,6 +78,20 @@ serve(async (req) => {
               partner_earnings_kes: 0,
               combined_fee_kes: paystack_fee_kes + api_earnings_kes,
             });
+            if (ledgerErr) {
+              console.error("apicosts insert failed (paystack webhook)", ledgerErr.message, { bookingId, reference });
+              return json({ error: "ledger write failed" }, 500); // non-2xx — Paystack retries the webhook
+            }
+
+            const { error: bookingErr } = await db.from("bookings").update({
+              payment_status: "completed",
+              status: "confirmed",
+              mpesa_receipt: reference,
+              paid_at: new Date().toISOString(),
+            }).eq("id", bookingId);
+            if (bookingErr) {
+              console.error("booking update failed after ledger write (paystack webhook)", bookingErr.message, { bookingId, reference });
+            }
 
             // Payment confirmed email
             const { data: fullBooking } = await db
@@ -229,18 +242,11 @@ serve(async (req) => {
             .maybeSingle();
 
           if (booking && booking.payment_status !== "completed") {
-            await db.from("bookings").update({
-              payment_status: "completed",
-              status: "confirmed",
-              mpesa_receipt: reference,
-              paid_at: new Date().toISOString(),
-            }).eq("id", bookingId);
-
             const paystack_fee_kes = Math.round(amount_kes * 0.015);
             const net_kes = amount_kes - paystack_fee_kes;
             const api_earnings_kes = Math.round(net_kes * 0.08);
 
-            await db.from("apicosts").insert({
+            const { error: ledgerErr } = await db.from("apicosts").insert({
               type: "deposit",
               booking_id: bookingId,
               payment_id: reference,
@@ -251,6 +257,25 @@ serve(async (req) => {
               partner_earnings_kes: 0,
               combined_fee_kes: paystack_fee_kes + api_earnings_kes,
             });
+            // Unlike the webhook, there's a live user waiting on this
+            // redirect — telling them "failed" when Paystack genuinely
+            // charged them risks a second, duplicate payment. So the
+            // booking still completes even if the ledger write fails; the
+            // failure is logged CRITICAL so it surfaces for manual
+            // reconciliation instead of vanishing (the bug this replaces).
+            if (ledgerErr) {
+              console.error("CRITICAL: apicosts insert failed (paystack verify) — booking will still be marked paid", ledgerErr.message, { bookingId, reference, amount_kes });
+            }
+
+            const { error: bookingErr } = await db.from("bookings").update({
+              payment_status: "completed",
+              status: "confirmed",
+              mpesa_receipt: reference,
+              paid_at: new Date().toISOString(),
+            }).eq("id", bookingId);
+            if (bookingErr) {
+              console.error("booking update failed (paystack verify)", bookingErr.message, { bookingId, reference });
+            }
           }
         }
         return json({ status: "success", booking_id: bookingId });

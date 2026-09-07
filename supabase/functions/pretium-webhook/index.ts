@@ -188,26 +188,40 @@ serve(async (req) => {
     const owner_earnings_kes = api_earnings_kes;
     const partner_earnings_kes = 0;
 
-    await Promise.all([
-      db.from("bookings").update({
-        payment_status: "completed",
-        status: "confirmed",
-        mpesa_receipt: receipt_number ?? null,
-        paid_at: new Date().toISOString(),
-      }).eq("id", booking.id),
+    // Ledger row goes in FIRST and is verified before the booking is ever
+    // marked paid — this guarantees "booking completed" and "apicosts row
+    // exists" can never disagree. A prior version ran both writes in
+    // parallel with no error check on either, so a transient apicosts
+    // insert failure could silently mark a booking paid while leaving no
+    // ledger row behind at all — invisible, unrecoverable revenue.
+    const { error: ledgerErr } = await db.from("apicosts").insert({
+      type: "deposit",
+      booking_id: booking.id,
+      payment_id: transaction_code,
+      transaction_amount_kes: amount_kes,
+      pretium_fee_kes,
+      api_earnings_kes,
+      owner_earnings_kes,
+      partner_earnings_kes,
+      combined_fee_kes: pretium_fee_kes + api_earnings_kes,
+    });
+    if (ledgerErr) {
+      console.error("apicosts insert failed (booking deposit)", ledgerErr.message, { booking_id: booking.id, transaction_code });
+      return json({ error: "ledger write failed" }, 500); // non-2xx — Pretium retries the whole webhook
+    }
 
-      db.from("apicosts").insert({
-        type: "deposit",
-        booking_id: booking.id,
-        payment_id: transaction_code,
-        transaction_amount_kes: amount_kes,
-        pretium_fee_kes,
-        api_earnings_kes,
-        owner_earnings_kes,
-        partner_earnings_kes,
-        combined_fee_kes: pretium_fee_kes + api_earnings_kes,
-      }),
-    ]);
+    const { error: bookingErr } = await db.from("bookings").update({
+      payment_status: "completed",
+      status: "confirmed",
+      mpesa_receipt: receipt_number ?? null,
+      paid_at: new Date().toISOString(),
+    }).eq("id", booking.id);
+    if (bookingErr) {
+      console.error("booking update failed after ledger write", bookingErr.message, { booking_id: booking.id, transaction_code });
+      // Ledger row is already safely recorded even if this update failed —
+      // worth investigating, but don't ask Pretium to retry (that would
+      // insert a second ledger row for the same payment).
+    }
 
     await settleIfReady(db, "owner");
     await settleIfReady(db, "partner");
