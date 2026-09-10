@@ -71,14 +71,18 @@ serve(async (req) => {
       const userIds = [...new Set((bookings ?? []).map((b: any) => b.user_id))];
       const bookingIds = (bookings ?? []).map((b: any) => b.id);
 
-      const [{ data: profiles }, { data: outreach }] = await Promise.all([
+      const [{ data: profiles, error: pErr }, { data: outreach, error: oErr }] = await Promise.all([
         userIds.length
-          ? admin.from("profiles").select("id, full_name, email, phone, country").in("id", userIds)
-          : Promise.resolve({ data: [] as any[] }),
+          ? admin.from("profiles").select("id, full_name, email, country").in("id", userIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
         bookingIds.length
           ? admin.from("booking_outreach").select("booking_id, subject, sent_at").in("booking_id", bookingIds).order("sent_at", { ascending: false })
-          : Promise.resolve({ data: [] as any[] }),
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
+      // Don't fail the whole list if these degrade — just log and continue
+      // with what we have (e.g. booking_outreach not migrated yet).
+      if (pErr) console.error("profiles lookup failed", pErr.message);
+      if (oErr) console.error("booking_outreach lookup failed", oErr.message);
 
       const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       const omap = new Map<string, any[]>();

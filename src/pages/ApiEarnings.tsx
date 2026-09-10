@@ -494,14 +494,16 @@ export default function ApiEarnings() {
                           )}
                         </div>
                         <div className="shrink-0 flex flex-col items-end gap-1.5">
-                          {chaseable && (
+                          {chaseable && c?.email && (
                             <button
                               onClick={() => openEmail(b)}
-                              disabled={!c?.email}
-                              className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-40 disabled:no-underline"
+                              className="flex items-center gap-1.5 text-xs font-medium text-primary border border-primary/30 rounded-md px-2.5 py-1 hover:bg-primary/5 transition-colors"
                             >
                               <Mail className="w-3.5 h-3.5" /> Email
                             </button>
+                          )}
+                          {chaseable && !c?.email && (
+                            <span className="text-[11px] text-muted-foreground">no email on file</span>
                           )}
                           {deletable && (
                             <button
