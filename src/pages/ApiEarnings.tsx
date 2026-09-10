@@ -7,8 +7,25 @@ import { format } from "date-fns";
 import { Loader2, Smartphone, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { pretiumDisburseFee } from "@/lib/pretium";
+import { FEATURES } from "@/lib/features";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const AUTO_SETTLE_THRESHOLD = 5000;
+
+type DeleteTarget =
+  | { kind: "booking"; id: string; label: string }
+  | { kind: "prompt"; id: string; label: string }
+  | null;
 
 export default function ApiEarnings() {
   const { user, loading } = useAuth();
@@ -24,7 +41,7 @@ export default function ApiEarnings() {
   const [records, setRecords] = useState<{ bookings: any[]; direct_payments: any[] }>({ bookings: [], direct_payments: [] });
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [recordsTab, setRecordsTab] = useState<"bookings" | "collect">("bookings");
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
 
   const callOwnerTransactions = async (body: Record<string, unknown>) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -47,26 +64,21 @@ export default function ApiEarnings() {
     setRecordsLoading(false);
   };
 
-  const deleteBooking = async (id: string) => {
-    if (!confirm("Delete this failed/cancelled booking permanently? This cannot be undone.")) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { kind, id } = deleteTarget;
     setDeletingId(id);
     try {
-      await callOwnerTransactions({ action: "delete_booking", booking_id: id });
-      toast.success("Booking deleted");
-      setRecords((r) => ({ ...r, bookings: r.bookings.filter((b) => b.id !== id) }));
-    } catch (e: any) {
-      toast.error(e.message ?? "Delete failed");
-    }
-    setDeletingId(null);
-  };
-
-  const deleteDirectPayment = async (id: string) => {
-    if (!confirm("Delete this failed payment prompt permanently? This cannot be undone.")) return;
-    setDeletingId(id);
-    try {
-      await callOwnerTransactions({ action: "delete_direct_payment", id });
-      toast.success("Prompt deleted");
-      setRecords((r) => ({ ...r, direct_payments: r.direct_payments.filter((d) => d.id !== id) }));
+      if (kind === "booking") {
+        await callOwnerTransactions({ action: "delete_booking", booking_id: id });
+        setRecords((r) => ({ ...r, bookings: r.bookings.filter((b) => b.id !== id) }));
+        toast.success("Booking deleted");
+      } else {
+        await callOwnerTransactions({ action: "delete_direct_payment", id });
+        setRecords((r) => ({ ...r, direct_payments: r.direct_payments.filter((d) => d.id !== id) }));
+        toast.success("Prompt deleted");
+      }
+      setDeleteTarget(null);
     } catch (e: any) {
       toast.error(e.message ?? "Delete failed");
     }
@@ -113,17 +125,18 @@ export default function ApiEarnings() {
 
   const mpesaEarned   = mpesaDeposits.reduce((s, r) => s + ownerCut(r), 0);
   const cardEarned    = cardDeposits.reduce((s, r) => s + ownerCut(r), 0);
-  const totalEarned   = mpesaEarned + cardEarned;
 
   // Already-settled owner cut: withdrawn deposit rows + any settlement rows
   const mpesaSettled  = mpesaDeposits.filter(r => r.owner_withdrawn).reduce((s, r) => s + ownerCut(r), 0)
     + settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
+  const cardSettled   = cardDeposits.filter(r => r.owner_withdrawn).reduce((s, r) => s + ownerCut(r), 0);
   const totalSettled  = depositRows.filter(r => r.owner_withdrawn).reduce((s, r) => s + ownerCut(r), 0)
     + settlementRows.reduce((s, r) => s + (r.owner_earnings_kes ?? 0), 0);
 
-  // Real unsettled M-Pesa owner earnings (was previously hardcoded to 0)
+  // Real unsettled owner earnings (both were previously over-counted:
+  // mpesa was hardcoded to 0, card summed withdrawn rows too)
   const mpesaPending  = Math.max(0, mpesaEarned - mpesaSettled);
-  const cardPending   = cardEarned; // never auto-settled — always manual
+  const cardPending   = Math.max(0, cardEarned - cardSettled);
   const pending       = mpesaPending;
   const isReady       = mpesaPending >= AUTO_SETTLE_THRESHOLD;
 
@@ -152,170 +165,176 @@ export default function ApiEarnings() {
   if (!user) return <Navigate to="/auth" replace />;
   if (!authorized) return <Navigate to="/" replace />;
 
+  const ledgerRows = apicosts;
+  const bookingsCount = records.bookings.length;
+  const promptsCount = records.direct_payments.length;
+
   return (
     <Layout>
-      <div className="container mx-auto py-12 max-w-2xl">
+      <div className="container mx-auto py-12 max-w-3xl">
+        <h1 className="font-serif text-3xl font-bold text-primary mb-6">Costs</h1>
 
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">Total pending earnings</p>
-            <p className="text-4xl font-bold text-primary">KES {pending.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              KES {mpesaEarned.toLocaleString()} M-Pesa earned · KES {totalSettled.toLocaleString()} settled
-            </p>
-          </div>
-          <button
-            onClick={toggleAutoSettle}
-            disabled={togglingAuto}
-            className={`mt-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-              autoSettle ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Auto-settle: {autoSettle ? "ON" : "OFF"}
-          </button>
-        </div>
+        <Tabs defaultValue="earnings">
+          <TabsList className="flex-wrap h-auto">
+            <TabsTrigger value="earnings">Earnings</TabsTrigger>
+            <TabsTrigger value="ledger">Ledger{ledgerRows.length ? ` (${ledgerRows.length})` : ""}</TabsTrigger>
+            <TabsTrigger value="bookings">Bookings{bookingsCount ? ` (${bookingsCount})` : ""}</TabsTrigger>
+            <TabsTrigger value="prompts">Prompts{promptsCount ? ` (${promptsCount})` : ""}</TabsTrigger>
+          </TabsList>
 
-        {/* Card earnings — manual deduction reminder */}
-        {cardPending > 0 && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 mb-4">
-            <p className="text-sm font-semibold text-blue-800">Card payments (Paystack)</p>
-            <p className="text-2xl font-bold text-blue-700 mt-1">KES {cardPending.toLocaleString()}</p>
-            <p className="text-xs text-blue-600 mt-1">
-              Deduct this from your next Paystack bank transfer — this is your 8% cut from card payments.
-            </p>
-          </div>
-        )}
-
-        {/* M-Pesa earnings — settleable via Pretium */}
-        {mpesaPending > 0 && (
-          <div className="rounded-xl border border-border bg-secondary/20 p-5 space-y-3 mb-10">
-            <div>
-              <p className="text-sm font-semibold">M-Pesa earnings (Pretium)</p>
-              <p className="text-2xl font-bold text-primary mt-1">KES {mpesaPending.toLocaleString()}</p>
-            </div>
-            {!isReady && (
-              <p className="text-xs text-muted-foreground">
-                KES {(AUTO_SETTLE_THRESHOLD - mpesaPending).toLocaleString()} until auto-settle threshold
-              </p>
-            )}
-            <div className="border-t border-border pt-3 space-y-2">
-              <label className="text-xs text-muted-foreground">Amount to withdraw (KES)</label>
-              <input
-                type="number"
-                min={1}
-                max={mpesaPending}
-                value={withdrawAmount}
-                onChange={e => setWithdrawAmount(e.target.value)}
-                placeholder={mpesaPending.toLocaleString()}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-              />
-              {(() => {
-                const amt = Math.min(Number(withdrawAmount) || mpesaPending, mpesaPending);
-                const f   = pretiumDisburseFee(amt);
-                const r   = Math.max(0, amt - f);
-                return (
-                  <div className="text-xs space-y-0.5 text-muted-foreground">
-                    <div className="flex justify-between"><span>Pretium fee</span><span>− KES {f.toLocaleString()}</span></div>
-                    <div className="flex justify-between font-semibold text-primary border-t border-border pt-1 mt-1">
-                      <span>Will receive</span><span>KES {r.toLocaleString()}</span>
-                    </div>
-                  </div>
-                );
-              })()}
+          {/* ── Earnings ── */}
+          <TabsContent value="earnings" className="mt-6 space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Total pending earnings</p>
+                <p className="text-4xl font-bold text-primary">KES {pending.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  KES {mpesaEarned.toLocaleString()} M-Pesa earned · KES {totalSettled.toLocaleString()} settled
+                </p>
+              </div>
               <button
-                onClick={handleSettle}
-                disabled={settling || mpesaPending <= 0}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 w-full justify-center"
+                onClick={toggleAutoSettle}
+                disabled={togglingAuto}
+                className={`mt-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                  autoSettle ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
               >
-                {settling
-                  ? <><Loader2 size={13} className="animate-spin" /> Settling…</>
-                  : <><Smartphone size={13} /> Settle to M-Pesa</>
-                }
+                Auto-settle: {autoSettle ? "ON" : "OFF"}
               </button>
             </div>
-          </div>
-        )}
 
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground mb-4">Transactions</p>
-          {apicosts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No transactions yet.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {apicosts.map((r) => {
-                const isDeposit = r.type === "deposit";
-                const isCard = typeof r.payment_id === "string" && r.payment_id.startsWith("TA-");
-                const feeLabel = isCard ? "Card fee (1.5%)" : "M-Pesa fee (2%)";
-                const net = r.transaction_amount_kes - r.pretium_fee_kes;
-                return (
-                  <div key={r.id} className="py-4 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium text-primary flex items-center gap-2">
-                        {isDeposit ? "Exam payment" : "Withdrawal"}
-                        {isDeposit && (
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                            isCard ? "text-blue-700 border-blue-300" : "text-green-700 border-green-300"
-                          }`}>
-                            {isCard ? "Card" : "M-Pesa"}
-                          </span>
-                        )}
-                      </p>
-                      {isDeposit && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          KES {r.transaction_amount_kes?.toLocaleString()} in
-                          {" "}· {feeLabel} −KES {r.pretium_fee_kes?.toLocaleString()}
-                          {" "}· net KES {net.toLocaleString()}
-                          {" "}· cut (8%) KES {r.api_earnings_kes?.toLocaleString()}
+            {/* Card earnings — only while Paystack is actually in use. When
+                it's disabled, historical card rows still live in the Ledger
+                tab for the record, but this actionable "deduct from your
+                next transfer" prompt is just noise. */}
+            {FEATURES.paystack && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm font-semibold text-blue-800">Card payments (Paystack)</p>
+                <p className="text-2xl font-bold text-blue-700 mt-1">KES {cardPending.toLocaleString()}</p>
+                <p className="text-xs text-blue-600 mt-1">
+                  {cardPending > 0
+                    ? "Deduct this from your next Paystack bank transfer — this is your 8% cut from card payments."
+                    : "Your 8% cut from card payments will appear here."}
+                </p>
+              </div>
+            )}
+
+            {/* M-Pesa earnings — settleable via Pretium */}
+            <div className="rounded-xl border border-border bg-secondary/20 p-5 space-y-3">
+              <div>
+                <p className="text-sm font-semibold">M-Pesa earnings (Pretium)</p>
+                <p className="text-2xl font-bold text-primary mt-1">KES {mpesaPending.toLocaleString()}</p>
+              </div>
+              {mpesaPending > 0 ? (
+                <>
+                  {!isReady && (
+                    <p className="text-xs text-muted-foreground">
+                      KES {(AUTO_SETTLE_THRESHOLD - mpesaPending).toLocaleString()} until auto-settle threshold
+                    </p>
+                  )}
+                  <div className="border-t border-border pt-3 space-y-2">
+                    <label className="text-xs text-muted-foreground">Amount to withdraw (KES)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={mpesaPending}
+                      value={withdrawAmount}
+                      onChange={e => setWithdrawAmount(e.target.value)}
+                      placeholder={mpesaPending.toLocaleString()}
+                      className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                    />
+                    {(() => {
+                      const amt = Math.min(Number(withdrawAmount) || mpesaPending, mpesaPending);
+                      const f   = pretiumDisburseFee(amt);
+                      const r   = Math.max(0, amt - f);
+                      return (
+                        <div className="text-xs space-y-0.5 text-muted-foreground">
+                          <div className="flex justify-between"><span>Pretium fee</span><span>− KES {f.toLocaleString()}</span></div>
+                          <div className="flex justify-between font-semibold text-primary border-t border-border pt-1 mt-1">
+                            <span>Will receive</span><span>KES {r.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <button
+                      onClick={handleSettle}
+                      disabled={settling || mpesaPending <= 0}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 w-full justify-center"
+                    >
+                      {settling
+                        ? <><Loader2 size={13} className="animate-spin" /> Settling…</>
+                        : <><Smartphone size={13} /> Settle to M-Pesa</>
+                      }
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Nothing to settle yet.</p>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* ── Ledger ── */}
+          <TabsContent value="ledger" className="mt-6">
+            {ledgerRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No transactions yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {ledgerRows.map((r) => {
+                  const isDeposit = r.type === "deposit";
+                  const isCard = typeof r.payment_id === "string" && r.payment_id.startsWith("TA-");
+                  const feeLabel = isCard ? "Card fee (1.5%)" : "M-Pesa fee (2%)";
+                  const net = r.transaction_amount_kes - r.pretium_fee_kes;
+                  return (
+                    <div key={r.id} className="py-4 flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-primary flex items-center gap-2">
+                          {isDeposit ? "Exam payment" : "Withdrawal"}
+                          {isDeposit && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                              isCard ? "text-blue-700 border-blue-300" : "text-green-700 border-green-300"
+                            }`}>
+                              {isCard ? "Card" : "M-Pesa"}
+                            </span>
+                          )}
                         </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(r.created_at), "d MMM yyyy")}
-                      </p>
-                    </div>
-                    {isDeposit && (
-                      <div className="text-right shrink-0">
+                        {isDeposit && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            KES {r.transaction_amount_kes?.toLocaleString()} in
+                            {" "}· {feeLabel} −KES {r.pretium_fee_kes?.toLocaleString()}
+                            {" "}· net KES {net.toLocaleString()}
+                            {" "}· cut (8%) KES {r.api_earnings_kes?.toLocaleString()}
+                          </p>
+                        )}
                         <p className="text-xs text-muted-foreground">
-                          Earnings: <span className="font-semibold text-primary">+KES {r.owner_earnings_kes?.toLocaleString()}</span>
-                          <span className={`ml-1 ${r.owner_withdrawn ? "text-green-600" : "text-muted-foreground"}`}>
-                            {r.owner_withdrawn ? "✓ settled" : "· pending"}
-                          </span>
+                          {format(new Date(r.created_at), "d MMM yyyy")}
                         </p>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                      {isDeposit && (
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-muted-foreground">
+                            Earnings: <span className="font-semibold text-primary">+KES {r.owner_earnings_kes?.toLocaleString()}</span>
+                            <span className={`ml-1 ${r.owner_withdrawn ? "text-green-600" : "text-muted-foreground"}`}>
+                              {r.owner_withdrawn ? "✓ settled" : "· pending"}
+                            </span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
 
-        {/* All bookings + Collect-payment prompts — full visibility for the
-            owner; delete is only ever offered for failed/cancelled rows,
-            and the edge function re-checks that server-side regardless of
-            what's clicked here. apicosts (the ledger above) is never
-            touched by this section. */}
-        <div className="mt-12">
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Records</p>
-            <div className="flex gap-1 bg-muted rounded-md p-0.5">
-              {(["bookings", "collect"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setRecordsTab(t)}
-                  className={`text-xs px-3 py-1 rounded transition-colors ${
-                    recordsTab === t ? "bg-background text-primary shadow-sm font-medium" : "text-muted-foreground hover:text-primary"
-                  }`}
-                >
-                  {t === "bookings" ? "Bookings" : "Collect payment prompts"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {recordsLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : recordsTab === "bookings" ? (
-            records.bookings.length === 0 ? (
+          {/* ── Bookings ── */}
+          <TabsContent value="bookings" className="mt-6">
+            <p className="text-xs text-muted-foreground mb-4">
+              Every booking. Delete is only offered for failed or cancelled ones — the server re-checks that, so a paid booking can never be removed here.
+            </p>
+            {recordsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : records.bookings.length === 0 ? (
               <p className="text-sm text-muted-foreground">No bookings yet.</p>
             ) : (
               <div className="divide-y divide-border">
@@ -324,7 +343,7 @@ export default function ApiEarnings() {
                   return (
                     <div key={b.id} className="py-3 flex items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-primary flex items-center gap-2">
+                        <p className="text-sm font-medium text-primary flex items-center gap-2 flex-wrap">
                           {b.level}
                           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
                             b.payment_status === "completed" ? "text-green-700 border-green-300"
@@ -343,7 +362,7 @@ export default function ApiEarnings() {
                       </div>
                       {deletable && (
                         <button
-                          onClick={() => deleteBooking(b.id)}
+                          onClick={() => setDeleteTarget({ kind: "booking", id: b.id, label: `the ${b.level} booking (${b.payment_status}) from ${format(new Date(b.created_at), "d MMM yyyy")}` })}
                           disabled={deletingId === b.id}
                           className="shrink-0 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1 rounded hover:bg-red-50"
                         >
@@ -354,43 +373,74 @@ export default function ApiEarnings() {
                   );
                 })}
               </div>
-            )
-          ) : records.direct_payments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No prompt payments yet.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {records.direct_payments.map((p) => (
-                <div key={p.id} className="py-3 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-primary flex items-center gap-2">
-                      {p.phone}
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                        p.status === "completed" ? "text-green-700 border-green-300"
-                          : p.status === "failed" ? "text-red-700 border-red-300"
-                          : "text-muted-foreground border-border"
-                      }`}>
-                        {p.status}
-                      </span>
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      KES {(p.amount_kes ?? 0).toLocaleString()} · {p.note || "—"} · {format(new Date(p.created_at), "d MMM yyyy")}
-                    </p>
+            )}
+          </TabsContent>
+
+          {/* ── Prompts ── */}
+          <TabsContent value="prompts" className="mt-6">
+            <p className="text-xs text-muted-foreground mb-4">
+              Collect-payment prompts. Only failed prompts can be deleted.
+            </p>
+            {recordsLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : records.direct_payments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No prompt payments yet.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {records.direct_payments.map((p) => (
+                  <div key={p.id} className="py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-primary flex items-center gap-2 flex-wrap">
+                        {p.phone}
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                          p.status === "completed" ? "text-green-700 border-green-300"
+                            : p.status === "failed" ? "text-red-700 border-red-300"
+                            : "text-muted-foreground border-border"
+                        }`}>
+                          {p.status}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        KES {(p.amount_kes ?? 0).toLocaleString()} · {p.note || "—"} · {format(new Date(p.created_at), "d MMM yyyy")}
+                      </p>
+                    </div>
+                    {p.status === "failed" && (
+                      <button
+                        onClick={() => setDeleteTarget({ kind: "prompt", id: p.id, label: `the failed prompt to ${p.phone} for KES ${(p.amount_kes ?? 0).toLocaleString()}` })}
+                        disabled={deletingId === p.id}
+                        className="shrink-0 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1 rounded hover:bg-red-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    )}
                   </div>
-                  {p.status === "failed" && (
-                    <button
-                      onClick={() => deleteDirectPayment(p.id)}
-                      disabled={deletingId === p.id}
-                      className="shrink-0 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1 rounded hover:bg-red-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes {deleteTarget?.label}. It won't touch the earnings ledger or any wallet balance. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmDelete(); }}
+              disabled={deletingId !== null}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deletingId !== null ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

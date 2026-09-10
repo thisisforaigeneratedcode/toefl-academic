@@ -21,6 +21,7 @@ import AdminChat from "@/components/AdminChat";
 import AdminManualBooking from "@/components/AdminManualBooking";
 import AdminCollectPayment from "@/components/AdminCollectPayment";
 import { pretiumDisburseFee } from "@/lib/pretium";
+import { FEATURES } from "@/lib/features";
 
 function estimateReceived(amount: number): number {
   return Math.max(0, amount - pretiumDisburseFee(amount));
@@ -445,7 +446,8 @@ export default function Admin() {
                 </div>
               </Card>
 
-              {/* Paystack card balance */}
+              {/* Paystack card balance — only while card payments are live */}
+              {FEATURES.paystack && (
               <Card className="p-6">
                 <div className="text-xs uppercase text-muted-foreground mb-3">Paystack (Card payments)</div>
                 <div className="grid grid-cols-2 gap-4">
@@ -465,6 +467,7 @@ export default function Admin() {
                   </div>
                 </div>
               </Card>
+              )}
 
               {/* Transaction history */}
               <Card className="p-4">
