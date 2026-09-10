@@ -1,12 +1,16 @@
-// Lets the api_owner_user_id (the Costs page owner) view every booking and
-// every Collect-payment prompt, and delete only the ones that are pure
-// clutter: failed/cancelled bookings, and failed prompts. Deletion is
-// re-verified server-side against the row's own status — the client's
-// request is never trusted — so a bug in the UI can never delete a booking
-// that was actually paid, or any apicosts ledger row (this function never
-// touches apicosts at all; that table's balance math must stay untouched).
+// Powers the Costs-page Bookings/Prompts tabs for the api_owner_user_id.
+//
+//  - list             every booking (with candidate name/email, failure
+//                     reason, outreach history) + every Collect-payment prompt
+//  - email_candidate  send a payment-recovery email to a booking's candidate
+//                     and log it
+//  - delete_booking / delete_direct_payment
+//                     delete ONLY failed/cancelled clutter — re-verified
+//                     server-side against the row's own status, so a UI bug
+//                     can never remove a paid booking. Never touches apicosts.
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { sendEmail, buildEmail } from "../_shared/email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +20,12 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const APP_URL = Deno.env.get("APP_URL") ?? "https://toeflacademic.com";
+
+const LEVEL_NAMES: Record<string, string> = {
+  A2: "Elementary (A2)", B1: "Intermediate (B1)", B2: "Upper-Intermediate (B2)",
+  C1: "Advanced (C1)", C2: "Proficient (C2)", WV: "Work & Visa English",
+};
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -57,7 +67,88 @@ serve(async (req) => {
         admin.from("direct_payments").select("*").order("created_at", { ascending: false }),
       ]);
       if (bErr || dpErr) return json({ error: (bErr ?? dpErr)?.message ?? "Failed to load" }, 500);
-      return json({ bookings: bookings ?? [], direct_payments: directPayments ?? [] });
+
+      const userIds = [...new Set((bookings ?? []).map((b: any) => b.user_id))];
+      const bookingIds = (bookings ?? []).map((b: any) => b.id);
+
+      const [{ data: profiles }, { data: outreach }] = await Promise.all([
+        userIds.length
+          ? admin.from("profiles").select("id, full_name, email, phone, country").in("id", userIds)
+          : Promise.resolve({ data: [] as any[] }),
+        bookingIds.length
+          ? admin.from("booking_outreach").select("booking_id, subject, sent_at").in("booking_id", bookingIds).order("sent_at", { ascending: false })
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const pmap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+      const omap = new Map<string, any[]>();
+      for (const o of outreach ?? []) {
+        if (!omap.has(o.booking_id)) omap.set(o.booking_id, []);
+        omap.get(o.booking_id)!.push(o);
+      }
+
+      const enriched = (bookings ?? []).map((b: any) => ({
+        ...b,
+        candidate: pmap.get(b.user_id) ?? null,
+        outreach: omap.get(b.id) ?? [],
+      }));
+
+      return json({ bookings: enriched, direct_payments: directPayments ?? [] });
+    }
+
+    if (action === "email_candidate") {
+      const booking_id = body?.booking_id as string | undefined;
+      const subject = (body?.subject as string | undefined)?.trim();
+      const messageBody = (body?.body as string | undefined)?.trim();
+      if (!booking_id || !subject || !messageBody) {
+        return json({ error: "booking_id, subject and body are all required" }, 400);
+      }
+
+      const { data: booking } = await admin
+        .from("bookings")
+        .select("id, user_id, level")
+        .eq("id", booking_id)
+        .maybeSingle();
+      if (!booking) return json({ error: "Booking not found" }, 404);
+
+      const { data: profile } = await admin
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", booking.user_id)
+        .maybeSingle();
+      if (!profile?.email) return json({ error: "Candidate has no email on file" }, 400);
+
+      const firstName = profile.full_name?.split(" ")[0] ?? "there";
+      const levelName = LEVEL_NAMES[booking.level] ?? booking.level;
+      const paragraphs = messageBody
+        .split(/\n{2,}/)
+        .map((p) => `<p style="color:#374151;font-size:15px;line-height:1.6;">${p.replace(/\n/g, "<br/>")}</p>`)
+        .join("");
+
+      await sendEmail({
+        to: profile.email,
+        subject,
+        html: buildEmail({
+          heading: subject,
+          body: `<p style="color:#374151;font-size:15px;line-height:1.6;">Hi ${firstName},</p>${paragraphs}`,
+          ctaLabel: "Go to my dashboard",
+          ctaUrl: `${APP_URL}/dashboard`,
+          footerLink1Label: "My Dashboard",
+          footerLink1Url: `${APP_URL}/dashboard`,
+          footerLink2Label: "Contact Support",
+          footerLink2Url: "mailto:support@toeflacademic.com",
+        }),
+      });
+
+      await admin.from("booking_outreach").insert({
+        booking_id,
+        sent_by: user.id,
+        subject,
+        body: messageBody,
+      });
+      await admin.from("bookings").update({ last_contacted_at: new Date().toISOString() }).eq("id", booking_id);
+
+      return json({ ok: true, sent_to: profile.email, level: levelName });
     }
 
     if (action === "delete_booking") {

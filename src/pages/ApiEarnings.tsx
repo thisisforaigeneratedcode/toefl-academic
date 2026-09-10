@@ -3,12 +3,24 @@ import { Navigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
-import { Loader2, Smartphone, Trash2 } from "lucide-react";
+import { format, formatDistanceToNow, isPast } from "date-fns";
+import { Loader2, Smartphone, Trash2, Mail, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { pretiumDisburseFee } from "@/lib/pretium";
 import { FEATURES } from "@/lib/features";
+import { LEVELS } from "@/lib/levels";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +33,44 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const AUTO_SETTLE_THRESHOLD = 5000;
+
+const levelName = (code: string) => LEVELS.find((l) => l.code === code)?.name ?? code;
+
+// Which bookings the recovery view surfaces, and how the owner filters them.
+const BOOKING_FILTERS = {
+  attention: { label: "Needs attention", test: (b: any) => ["unpaid", "failed", "pending"].includes(b.payment_status) },
+  unpaid:    { label: "Unpaid",   test: (b: any) => b.payment_status === "unpaid" },
+  failed:    { label: "Failed",   test: (b: any) => b.payment_status === "failed" },
+  pending:   { label: "Pending",  test: (b: any) => b.payment_status === "pending" },
+  all:       { label: "All",      test: (_b: any) => true },
+} as const;
+type BookingFilter = keyof typeof BOOKING_FILTERS;
+
+// Starting-point email per payment state — the owner edits before sending.
+function recoveryTemplate(b: any): { subject: string; body: string } {
+  const lvl = levelName(b.level);
+  const amount = b.amount_kes ? `KES ${b.amount_kes.toLocaleString()}` : "the exam fee";
+  const examDate = b.scheduled_at ? format(new Date(b.scheduled_at), "PPP") : "your scheduled date";
+  const reason = b.payment_failure_reason ? ` (${b.payment_failure_reason})` : "";
+  switch (b.payment_status) {
+    case "failed":
+      return {
+        subject: `Your ${lvl} payment didn't go through`,
+        body: `We tried to process your payment for the ${lvl} exam but it didn't complete${reason}. Your slot for ${examDate} is still held for now.\n\nYou can retry from your dashboard — it only takes a minute. If you keep hitting a problem, just reply to this email and tell us exactly what happens, and we'll sort it out with you.\n\nAmount due: ${amount}.`,
+      };
+    case "pending":
+      return {
+        subject: `Did your ${lvl} payment go through?`,
+        body: `We sent an M-Pesa prompt for your ${lvl} exam but haven't received confirmation yet.\n\nIf you were charged, reply to this email with your M-Pesa confirmation code and we'll match it up straight away. If not, you can retry from your dashboard.\n\nAmount due: ${amount}.`,
+      };
+    case "unpaid":
+    default:
+      return {
+        subject: `Complete your ${lvl} exam booking`,
+        body: `You booked the ${lvl} exam for ${examDate}, but payment hasn't been completed yet — so your slot isn't confirmed.\n\nYou can pay now from your dashboard in about a minute. If something's holding you back or you have any questions, just reply to this email and we'll help you get it done.\n\nAmount due: ${amount}.`,
+      };
+  }
+}
 
 type DeleteTarget =
   | { kind: "booking"; id: string; label: string }
@@ -42,6 +92,47 @@ export default function ApiEarnings() {
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+
+  // Payment-recovery email composer
+  const [bookingFilter, setBookingFilter] = useState<BookingFilter>("attention");
+  const [emailTarget, setEmailTarget] = useState<any | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const openEmail = (b: any) => {
+    const t = recoveryTemplate(b);
+    setEmailSubject(t.subject);
+    setEmailBody(t.body);
+    setEmailTarget(b);
+  };
+
+  const sendRecoveryEmail = async () => {
+    if (!emailTarget || !emailSubject.trim() || !emailBody.trim()) return;
+    setSendingEmail(true);
+    try {
+      const res = await callOwnerTransactions({
+        action: "email_candidate",
+        booking_id: emailTarget.id,
+        subject: emailSubject.trim(),
+        body: emailBody.trim(),
+      });
+      toast.success(`Email sent to ${res.sent_to}`);
+      const nowIso = new Date().toISOString();
+      setRecords((r) => ({
+        ...r,
+        bookings: r.bookings.map((b) =>
+          b.id === emailTarget.id
+            ? { ...b, last_contacted_at: nowIso, outreach: [{ subject: emailSubject.trim(), sent_at: nowIso }, ...(b.outreach ?? [])] }
+            : b,
+        ),
+      }));
+      setEmailTarget(null);
+    } catch (e: any) {
+      toast.error(e.message ?? "Could not send email");
+    }
+    setSendingEmail(false);
+  };
 
   const callOwnerTransactions = async (body: Record<string, unknown>) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -327,53 +418,107 @@ export default function ApiEarnings() {
             )}
           </TabsContent>
 
-          {/* ── Bookings ── */}
+          {/* ── Bookings (payment recovery) ── */}
           <TabsContent value="bookings" className="mt-6">
-            <p className="text-xs text-muted-foreground mb-4">
-              Every booking. Delete is only offered for failed or cancelled ones — the server re-checks that, so a paid booking can never be removed here.
+            <p className="text-xs text-muted-foreground mb-3">
+              Chase incomplete payments: see who booked, their email, exam date and why a payment failed — then email them to help finish it.
             </p>
+
+            <div className="flex flex-wrap gap-1 bg-muted rounded-md p-0.5 mb-4 w-fit">
+              {(Object.keys(BOOKING_FILTERS) as BookingFilter[]).map((k) => {
+                const count = records.bookings.filter(BOOKING_FILTERS[k].test).length;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setBookingFilter(k)}
+                    className={`text-xs px-3 py-1 rounded transition-colors ${
+                      bookingFilter === k ? "bg-background text-primary shadow-sm font-medium" : "text-muted-foreground hover:text-primary"
+                    }`}
+                  >
+                    {BOOKING_FILTERS[k].label}{count ? ` (${count})` : ""}
+                  </button>
+                );
+              })}
+            </div>
+
             {recordsLoading ? (
               <p className="text-sm text-muted-foreground">Loading…</p>
-            ) : records.bookings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No bookings yet.</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {records.bookings.map((b) => {
-                  const deletable = b.payment_status === "failed" || b.status === "cancelled";
-                  return (
-                    <div key={b.id} className="py-3 flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-primary flex items-center gap-2 flex-wrap">
-                          {b.level}
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                            b.payment_status === "completed" ? "text-green-700 border-green-300"
-                              : b.payment_status === "failed" ? "text-red-700 border-red-300"
-                              : "text-muted-foreground border-border"
-                          }`}>
-                            {b.payment_status}
-                          </span>
-                          {b.status === "cancelled" && (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border text-red-700 border-red-300">cancelled</span>
+            ) : (() => {
+              const rows = records.bookings.filter(BOOKING_FILTERS[bookingFilter].test);
+              if (rows.length === 0) return <p className="text-sm text-muted-foreground">Nothing here.</p>;
+              return (
+                <div className="divide-y divide-border">
+                  {rows.map((b) => {
+                    const c = b.candidate;
+                    const deletable = b.payment_status === "failed" || b.status === "cancelled";
+                    const chaseable = ["unpaid", "failed", "pending"].includes(b.payment_status);
+                    const overdue = b.scheduled_at && isPast(new Date(b.scheduled_at));
+                    const lastContacted = b.last_contacted_at ?? b.outreach?.[0]?.sent_at ?? null;
+                    return (
+                      <div key={b.id} className="py-3.5 flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-sm font-medium text-primary flex items-center gap-2 flex-wrap">
+                            {c?.full_name ?? "Unknown candidate"}
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                              b.payment_status === "completed" ? "text-green-700 border-green-300"
+                                : b.payment_status === "failed" ? "text-red-700 border-red-300"
+                                : b.payment_status === "pending" ? "text-amber-700 border-amber-300"
+                                : "text-muted-foreground border-border"
+                            }`}>
+                              {b.payment_status}
+                            </span>
+                            {b.status === "cancelled" && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded border text-red-700 border-red-300">cancelled</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground break-all">{c?.email ?? "no email on file"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {levelName(b.level)} · KES {(b.amount_kes ?? 0).toLocaleString()}
+                            {b.scheduled_at && (
+                              <> · exam {format(new Date(b.scheduled_at), "d MMM yyyy")}
+                                {overdue && <span className="text-red-600 font-medium"> · overdue</span>}
+                              </>
+                            )}
+                          </p>
+                          {b.payment_status === "failed" && (
+                            <p className="text-xs text-red-600 flex items-start gap-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                              {b.payment_failure_reason || "No failure reason was recorded."}
+                            </p>
                           )}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          KES {(b.amount_kes ?? 0).toLocaleString()} · {format(new Date(b.created_at), "d MMM yyyy")}
-                        </p>
+                          {lastContacted && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Last emailed {formatDistanceToNow(new Date(lastContacted), { addSuffix: true })}
+                              {b.outreach?.length ? ` · ${b.outreach.length} sent` : ""}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 flex flex-col items-end gap-1.5">
+                          {chaseable && (
+                            <button
+                              onClick={() => openEmail(b)}
+                              disabled={!c?.email}
+                              className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-40 disabled:no-underline"
+                            >
+                              <Mail className="w-3.5 h-3.5" /> Email
+                            </button>
+                          )}
+                          {deletable && (
+                            <button
+                              onClick={() => setDeleteTarget({ kind: "booking", id: b.id, label: `the ${levelName(b.level)} booking for ${c?.full_name ?? "unknown"} (${b.payment_status})` })}
+                              disabled={deletingId === b.id}
+                              className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {deletable && (
-                        <button
-                          onClick={() => setDeleteTarget({ kind: "booking", id: b.id, label: `the ${b.level} booking (${b.payment_status}) from ${format(new Date(b.created_at), "d MMM yyyy")}` })}
-                          disabled={deletingId === b.id}
-                          className="shrink-0 flex items-center gap-1 text-xs text-red-600 hover:text-red-700 disabled:opacity-50 px-2 py-1 rounded hover:bg-red-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* ── Prompts ── */}
@@ -420,6 +565,49 @@ export default function ApiEarnings() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Payment-recovery email composer */}
+      <Dialog open={emailTarget !== null} onOpenChange={(open) => { if (!open && !sendingEmail) setEmailTarget(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Email {emailTarget?.candidate?.full_name ?? "candidate"}</DialogTitle>
+            <DialogDescription>
+              To {emailTarget?.candidate?.email} · {emailTarget && levelName(emailTarget.level)} · {emailTarget?.payment_status}
+              {emailTarget?.payment_failure_reason ? ` · reason: ${emailTarget.payment_failure_reason}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Subject</label>
+              <Input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} className="mt-1" disabled={sendingEmail} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Message</label>
+              <Textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                rows={9}
+                className="mt-1 text-sm"
+                disabled={sendingEmail}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Sent from support@toeflacademic.com in the branded template, with a “Hi {emailTarget?.candidate?.full_name?.split(" ")[0] ?? "there"},” greeting and a dashboard button added automatically. Replies go to support.
+              </p>
+            </div>
+            {(emailTarget?.outreach?.length ?? 0) > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                Already contacted {emailTarget.outreach.length}× — last “{emailTarget.outreach[0].subject}” {formatDistanceToNow(new Date(emailTarget.outreach[0].sent_at), { addSuffix: true })}.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailTarget(null)} disabled={sendingEmail}>Cancel</Button>
+            <Button variant="gold" onClick={sendRecoveryEmail} disabled={sendingEmail || !emailSubject.trim() || !emailBody.trim()}>
+              {sendingEmail ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</> : <><Mail className="w-4 h-4 mr-2" />Send email</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>

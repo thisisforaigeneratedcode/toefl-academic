@@ -301,6 +301,7 @@ serve(async (req) => {
     await db.from("bookings").update({
       payment_status: "failed",
       status: "pending",
+      payment_failure_reason: message ?? null,
     }).eq("id", booking.id);
 
     // Payment failed email
